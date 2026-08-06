@@ -50,7 +50,30 @@ const JUNK_CONTENT_SIGNATURES = [
   "please enable javascript",
   "checking your browser",
   "access denied",
+  // Amazon's cookie-consent interstitial — confirmed in practice: a plain
+  // scrape of several Amazon product URLs returned only this wall ("Click
+  // the button below to continue shopping") with none of the real page
+  // content behind it, and that wall text alone was passing the "looks like
+  // a review" sentence heuristic downstream.
+  "click the button below to continue shopping",
 ];
+
+// Amazon and Flipkart both actively block anonymous/headless access to real
+// review text — confirmed directly (not assumed): Amazon's own dedicated
+// `/product-reviews/{ASIN}` page hard-redirects an unauthenticated scrape to
+// a full "Sign in or create account" wall (zero review content reachable at
+// all without a logged-in session), and Flipkart's product page renders no
+// review content in its markup even with scroll enabled — review cards need
+// a further click/interaction crawl4ai's plain load doesn't trigger. Free
+// scraping genuinely cannot get real review text from either site; every
+// URL matching these hosts is dropped from the review corpus rather than
+// injecting nav chrome, spec sheets, or a sign-in wall as if it were review
+// content. A proper fix needs a paid scraper (e.g. an Apify Amazon-reviews
+// actor using a real session/residential proxy) — flagged to the user
+// rather than silently degrading quality.
+function isUnscrapableEcommerceUrl(url: URL): boolean {
+  return url.hostname.includes("amazon.") || url.hostname.includes("flipkart.com");
+}
 
 function looksLikeJunkContent(text: string): boolean {
   const head = text.slice(0, 500).toLowerCase();
@@ -364,8 +387,22 @@ export async function autoGatherReviews(
 
   const [rawWebResults, playStoreContent, appStoreContent] = await Promise.all([
     searchWeb(
-      `${companyName}${descSuffix} reviews complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com OR site:capterra.com OR site:sitejabber.com OR site:consumeraffairs.com OR site:amazon.in OR site:amazon.com OR site:flipkart.com OR site:mouthshut.com)`,
-      8
+      // amazon.in/amazon.com/flipkart.com deliberately excluded — see
+      // isUnscrapableEcommerceUrl. Their results get filtered out
+      // downstream regardless, so including them here just burns search
+      // slots that could otherwise surface real review content from
+      // platforms that actually work.
+      `${companyName}${descSuffix} reviews complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com OR site:capterra.com OR site:sitejabber.com OR site:consumeraffairs.com OR site:mouthshut.com)`,
+      8,
+      // Without this, near-miss results (a platform's own homepage, a
+      // same-category unrelated brand, a generic "reviews are fake" thread)
+      // were passing straight through as if they were real data about this
+      // company — confirmed in practice: "ubon" search results included
+      // "Ubuy India" reviews (an unrelated company) and Trustpilot/
+      // MouthShut/ConsumerAffairs' own generic homepages, none of which
+      // mention UBON at all. Every other searchWeb() caller in this file
+      // already passes this; the review-gathering call was the one gap.
+      companyName
     ),
     scrapeGooglePlayReviews(companyName).catch(() => null),
     scrapeAppStoreReviews(companyName).catch(() => null),
@@ -376,10 +413,17 @@ export async function autoGatherReviews(
   // returned ubonindia.com's own "About Us" and blog pages, and a YouTube
   // unboxing video — none of which are real customer review text). The query
   // is only a hint; this hard allowlist against REVIEW_PLATFORM_HOSTS is the
-  // actual enforcement of "never the company's own site."
+  // actual enforcement of "never the company's own site." Amazon/Flipkart
+  // are also filtered out here as defense-in-depth (they're no longer in
+  // the query above, but REVIEW_PLATFORM_HOSTS still lists them for the
+  // direct-URL-paste branch elsewhere) — see isUnscrapableEcommerceUrl:
+  // anonymous scraping of either yields nav chrome/sign-in walls, never
+  // real review text.
   const webResults = rawWebResults.filter((item) => {
     const itemUrl = isUrl(item.url);
-    return itemUrl ? isKnownReviewPlatform(itemUrl) : false;
+    if (!itemUrl) return false;
+    if (isUnscrapableEcommerceUrl(itemUrl)) return false;
+    return isKnownReviewPlatform(itemUrl);
   });
 
   for (const item of webResults) {
