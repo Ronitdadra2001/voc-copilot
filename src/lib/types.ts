@@ -12,7 +12,7 @@ export interface RawIssue {
   at_risk_signals: string[];
   product_recommendation: string;
   marketing_recommendation: string;
-  finance_recommendation: string;
+  behavior_recommendation: string;
 }
 
 export interface AnalysisResult {
@@ -48,6 +48,11 @@ export interface Issue {
   /** 2-4 concrete, sequenced steps to fix it — cheapest/free step first
    * (Consultant Engine's cheapest-fix-first doctrine). */
   fix: string[];
+  /** At least 2 named PM frameworks (from RICE, CIRCLES, Kano, AARRR) used to
+   * diagnose this issue and sequence its fix, each stated as one concrete
+   * sentence — e.g. "Kano: must-be violation, not a nice-to-have" — not just
+   * the bare framework name. */
+  frameworks_applied: string[];
   /** What the fix costs to execute — a rupee/dollar estimate, "engineering
    * time only", or "$0 — config/policy change", whichever is honest. */
   cost: string;

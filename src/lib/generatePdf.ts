@@ -259,6 +259,13 @@ export async function generateDashboardPdf(
       drawText(`${i + 1}. ${step}`, { size: 10, extraGapAfter: 2 });
     });
 
+    if (issue.frameworks_applied?.length > 0) {
+      drawText("Frameworks applied:", { size: 10, f: bold, extraGapAfter: 2 });
+      for (const fw of issue.frameworks_applied) {
+        drawText(`• ${fw}`, { size: 10, color: rgb(0.4, 0.4, 0.45), extraGapAfter: 2 });
+      }
+    }
+
     drawText(`Cost: ${issue.cost}`, { size: 10, color: rgb(0.3, 0.3, 0.5), extraGapAfter: 2 });
     drawText(`Estimated impact: ${issue.impact}`, {
       size: 10,

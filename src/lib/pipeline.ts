@@ -5,7 +5,6 @@ import {
   getConsumerBehaviorJourneyKnowledge,
   getMarketingBrandingKnowledge,
   getProductKnowledge,
-  getFinanceKnowledge,
 } from "./knowledge-base";
 import type { AnalysisResult, Direction, DashboardReport } from "./types";
 
@@ -18,7 +17,7 @@ const RawIssueSchema = z.object({
   at_risk_signals: z.array(z.string()),
   product_recommendation: z.string(),
   marketing_recommendation: z.string(),
-  finance_recommendation: z.string(),
+  behavior_recommendation: z.string(),
 });
 
 const AnalysisResultSchema = z.object({
@@ -42,7 +41,7 @@ const SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object (no markdown
       "at_risk_signals": string[],
       "product_recommendation": string,
       "marketing_recommendation": string,
-      "finance_recommendation": string
+      "behavior_recommendation": string
     }
   ]
 }`;
@@ -127,7 +126,7 @@ export async function runAnalysis(
 2. Cluster related complaints into specific, plainly-named issues (e.g. group "app crashes", "kept freezing", "wouldn't load" into one issue named "App stability/crashes") — never output a vague issue like "general dissatisfaction," and never label it as an abstract "theme."
 3. Attach the REAL verbatim customer quotes behind each issue (copy exact substrings from the input reviews — do not paraphrase quotes).
 4. Flag at-risk / stated-exit signals per issue ONLY when the reviews for that issue actually contain explicit exit language: "cancelled," "switching to X," "uninstalled," "asking for refund," "never using again." at_risk_signals must quote the exact phrase found — if you cannot quote a real exit-intent phrase from the reviews, at_risk_signals must be an empty array and at_risk must be false. Do NOT default every issue to at_risk=true — most issues are just complaints, not stated exits, and marking all of them at-risk is a fabrication the user has explicitly flagged as wrong. Do not call this "churn" — you cannot observe churn from reviews, only stated exit intent.
-5. For each issue, write ONE recommendation per lens (product, marketing, finance), applying the opinionated frameworks in the knowledge base below. Every recommendation must be specific and quantified where the data allows (cite the mention count/percentage) — never a vague platitude like "improve the experience."
+5. For each issue, write ONE recommendation per lens (product, marketing, consumer-behavior), applying the opinionated frameworks in the knowledge base below. Every recommendation must be specific and quantified where the data allows (cite the mention count/percentage) — never a vague platitude like "improve the experience." The consumer-behavior recommendation must name the specific Bhupesh concept it's applying (e.g. "this is a Conjunctive-elimination dealbreaker" or "this damages the Ego-Defensive attitude function") — plain language first, concept name second.
 
 ${perspective}
 ${questionBlock}
@@ -192,7 +191,7 @@ function condenseIssuesForPrompt(analysisResult: AnalysisResult) {
     quotes: t.quotes.slice(0, 3),
     product_recommendation: t.product_recommendation.slice(0, 200),
     marketing_recommendation: t.marketing_recommendation.slice(0, 200),
-    finance_recommendation: t.finance_recommendation.slice(0, 200),
+    behavior_recommendation: t.behavior_recommendation.slice(0, 200),
   }));
 }
 
@@ -218,9 +217,9 @@ async function runConsumerBehaviorJourneyPass(
   if (analysisResult.issues.length === 0) return { issues: [] };
   const knowledgeBase = getConsumerBehaviorJourneyKnowledge();
 
-  const system = `You are reasoning through ONE lens only: consumer behavior and customer journey — for "${companyName}". Do not produce a final report. For each issue below, determine:
+  const system = `You are reasoning through ONE lens only: consumer behavior and customer journey — for "${companyName}". Do not produce a final report. The knowledge base below lists 22 named Bhupesh CB concepts (CDM funnel, value equation, valence, conditioning, memory nodes, positioning-vs-perceptual gap, JND, selective attention, assimilation-contrast, attitude ABC + 4 functions, hierarchy of effects, Horney personality types, AAAERRR journey, attribution theory, decision rules, diffusion of innovation, CBBE layers, brand fidelity matrix, Hofstede, ESM, RFM, brand-switch signal). Deliberately spread your reasoning across a WIDE set of these across the issues below — do not lean on the same 2-3 concepts for every issue. For each issue below, determine:
 - "journey_stage": where in the customer's path this breaks (e.g. "discover", "consider/evaluate", "purchase/checkout", "onboarding/first-use", "core use", "support/service", "renewal/advocacy") — pick the stage the quotes actually describe, not a guess.
-- "behavior_insight": one sentence applying the attitude-function framework from the knowledge base below (utilitarian / knowledge-object-appraisal / ego-defensive / value-expressive) — name WHICH function is damaged and why that changes how serious this is, grounded in the actual quotes for that issue. Never invent a behavioral claim the quotes don't support — if the quotes are too thin to diagnose an attitude function, say the evidence is limited rather than forcing one.
+- "behavior_insight": one to two sentences naming the SPECIFIC concept(s) from the knowledge base that best diagnose this issue (e.g. attitude function damaged, which decision rule this fails under, which Horney type the complaining voice reads as, whether it crosses JND, which CBBE layer it erodes) and why that changes how serious or urgent this is — grounded strictly in the actual quotes for that issue. Never invent a behavioral claim the quotes don't support — if the quotes are too thin to diagnose confidently, say the evidence is limited rather than forcing a concept onto it.
 
 === CONSUMER BEHAVIOR + CUSTOMER JOURNEY KNOWLEDGE ===
 ${knowledgeBase}
@@ -324,7 +323,7 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
         .join("\n\n")
     : "(no named competitors found)";
 
-  const system = `You are reasoning through ONE lens only: marketing and branding — for "${companyName}" (direction: ${direction}). Apply the STP/3C/POD-POP/CBBE/node-word/Enemy-Stand-Mantra frameworks in the knowledge base below. Tone: plain language first (what the customer actually experiences), THEN name the framework — never framework-name-dropping with no plain-English anchor.
+  const system = `You are reasoning through ONE lens only: marketing and branding — for "${companyName}" (direction: ${direction}). Apply the STP/3C/POD-POP/CBBE/node-word/Enemy-Stand-Mantra/brand-fidelity-matrix frameworks in the knowledge base below. Tone: plain language first (what the customer actually experiences), THEN name the framework — never framework-name-dropping with no plain-English anchor.
 
 - "gtm": segment/target/position inferred from the product/reviews; points_of_difference = things this product does that named competitors' context does NOT show (grounded in competitor data below, never invented); points_of_parity = things reviews show this product does that competitors also seem to do. Empty arrays if no competitor context exists — do not invent competitor behavior.
 - "brand.node_word": the single word this brand owns in customers' minds, ONLY if the evidence supports one. null + "insufficient data" if no clear word emerges — do not force one.
@@ -375,6 +374,7 @@ const IssueSchema = z.object({
   at_risk: z.boolean(),
   evidence: z.array(z.string()),
   fix: z.array(z.string()),
+  frameworks_applied: z.array(z.string()).min(2),
   cost: z.string(),
   impact: z.string(),
   metric_to_track: z.string(),
@@ -432,7 +432,6 @@ async function runProductFinancePass(
   behavior: BehaviorJourneyResult
 ): Promise<ProductFinanceResult> {
   const productKnowledge = getProductKnowledge();
-  const financeKnowledge = getFinanceKnowledge();
 
   const competitorsBlock = competitors.length
     ? competitors
@@ -444,7 +443,7 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
         .join("\n\n")
     : "(no named competitors found)";
 
-  const system = `You are reasoning through TWO lenses: product management, and finance — for "${companyName}" (direction: ${direction}). This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
+  const system = `You are reasoning through ONE opinionated lens: product management — for "${companyName}" (direction: ${direction}). You also report factual financial DATA where it exists (revenue-at-risk sizing, competitor financial findings) — but that is arithmetic on real numbers, not an opinionated finance framework being applied; do not reach for finance-consulting concepts (margin waterfalls, unit economics theory, cost allocation) anywhere in this pass. This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
 
 Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an MBA professor explains a case back to a student. Plain, humanized language first (what actually happened to the customer, in one clear sentence), THEN name the framework used to get there.
 
@@ -454,20 +453,18 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
    - "title": name the issue plainly and directly (e.g. "Missing charging cable in the box") — NEVER "Theme:" or an abstract category.
    - "evidence": 1-3 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
    - "fix": 2-4 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
+   - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the 4 named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." Never a bare framework name with no verdict attached.
    - "cost": a rupee/dollar estimate if reasonably inferable, "engineering time only" for investigation work, or "$0 — config/policy change" if free. Never vague.
-   - "impact": a modeled, assumption-stated estimate (Guesstimate framework from the finance knowledge below) — never a bare invented number.
+   - "impact": a modeled, assumption-stated estimate (Guesstimate method: state each assumption explicitly, then compute — never a bare invented number).
    - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
    - "priority": "now" (0-30 days) for must-fix-first — baseline/core-function failures or at_risk=true — "near" (31-60 days) for real but less urgent, "far" (61-90 days) for lower-severity items.
 4. "porters_five_forces" — qualitative, one sentence each. NAMED COMPETITORS below is real data — use it, do not default to "insufficient data" when non-empty. 0 named competitors → "competitive intensity can't be assessed from available data." 1+ → name them and describe rivalry from what their context actually shows.
-5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: only where real figures support it.
-6. "finance.revenue_at_risk" (Guesstimate framework: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
+5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: only where real figures support it — plainly stated numbers, not a costing framework.
+6. "finance.revenue_at_risk" (Guesstimate method: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
 7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below).
 
-=== PRODUCT MANAGEMENT KNOWLEDGE ===
+=== PRODUCT MANAGEMENT KNOWLEDGE (apply AT LEAST 2 named frameworks per issue) ===
 ${productKnowledge}
-
-=== FINANCE KNOWLEDGE ===
-${financeKnowledge}
 
 === ANALYSIS RESULT (condensed) ===
 ${JSON.stringify(
@@ -494,7 +491,7 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
   "summary": string,
   "metrics": { "total_reviews": integer, "issue_count": integer, "at_risk_issue_count": integer, "top_issue_title": string | null, "top_issue_pct": number | null },
   "highs": [{ "label": string, "detail": string }],
-  "issues": [{ "title": string, "pct_of_reviews": number, "at_risk": boolean, "evidence": string[], "fix": string[], "cost": string, "impact": string, "metric_to_track": string, "priority": "now" | "near" | "far" }],
+  "issues": [{ "title": string, "pct_of_reviews": number, "at_risk": boolean, "evidence": string[], "fix": string[], "frameworks_applied": string[], "cost": string, "impact": string, "metric_to_track": string, "priority": "now" | "near" | "far" }],
   "porters_five_forces": { "rivalry": string, "threat_of_new_entrants": string, "threat_of_substitutes": string, "buyer_power": string, "supplier_power": string },
   "finance": {
     "own": { "found": boolean, "findings": string[] },

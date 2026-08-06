@@ -488,6 +488,17 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
                 ))}
               </ol>
 
+              {issue.frameworks_applied?.length > 0 && (
+                <>
+                  <p className="text-xs font-semibold uppercase text-fg-soft mb-1">Frameworks applied</p>
+                  <ul className="text-sm text-fg-muted list-disc list-inside space-y-0.5 mb-3">
+                    {issue.frameworks_applied.map((f, j) => (
+                      <li key={j}>{f}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+
               <div className="grid sm:grid-cols-2 gap-2 text-xs rounded-md p-3" style={{ backgroundColor: "var(--color-muted)" }}>
                 <p className="text-fg">
                   <span className="font-semibold">Cost: </span>

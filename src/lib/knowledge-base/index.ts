@@ -11,40 +11,42 @@ function withMandate(...files: string[]): string {
   return [load("consultant-engine.md"), ...files.map(load)].join("\n\n---\n\n");
 }
 
+// finance.md (opinionated finance-framework lens: margin waterfall, ABC
+// costing, break-even/operating leverage) is deliberately not loaded here —
+// removed as a reasoning lens per product direction. Factual finance DATA
+// (competitor revenue findings, revenue-at-risk modeling) still flows
+// through the product/finance pass in pipeline.ts, just without this
+// opinionated-framework layer applied on top of it.
 export function getKnowledgeBase(): string {
   return [
     load("consultant-engine.md"),
     load("product.md"),
     load("marketing.md"),
-    load("finance.md"),
+    load("consumer-behavior-bhupesh.md"),
     load("strategy.md"),
     load("omnichannel.md"),
   ].join("\n\n---\n\n");
 }
 
-/** Consumer behavior + customer journey lens — attitude functions (why a
- * failure actually hurts a brand) and the four-pillar/journey-stage framing
- * of where in the customer's path something broke. Read FIRST in the report
- * pipeline: everything downstream (branding, product fixes) is grounded in
- * understanding the customer before prescribing anything. */
+/** Consumer behavior + customer journey lens — Bhupesh's CB concepts (CDM
+ * funnel, motivation/valence, memory nodes, perception, attitude functions,
+ * personality segmentation, AAAERRR journey, attribution, decision rules,
+ * culture) plus the four-pillar omni-channel framing. Read FIRST in the
+ * report pipeline: everything downstream (branding, product fixes) is
+ * grounded in understanding the customer before prescribing anything. */
 export function getConsumerBehaviorJourneyKnowledge(): string {
-  return withMandate("marketing.md", "omnichannel.md");
+  return withMandate("consumer-behavior-bhupesh.md", "marketing.md", "omnichannel.md");
 }
 
 /** Marketing & branding lens — STP, 3C positioning, POD/POP, CBBE pyramid,
- * node-word test, Enemy-Stand-Mantra campaigns. */
+ * node-word test, brand fidelity matrix, brand archetypes, Enemy-Stand-Mantra
+ * campaigns, Hofstede/cultural grounding. */
 export function getMarketingBrandingKnowledge(): string {
-  return withMandate("marketing.md", "strategy.md");
+  return withMandate("consumer-behavior-bhupesh.md", "marketing.md", "strategy.md");
 }
 
 /** Product management lens — RICE/CIRCLES prioritization, Kano-style
  * severity, AARRR funnel staging, cheapest-fix-first sequencing. */
 export function getProductKnowledge(): string {
   return withMandate("product.md");
-}
-
-/** Finance lens — unit economics, relevant cost, Guesstimate-framework
- * revenue-at-risk modeling. */
-export function getFinanceKnowledge(): string {
-  return withMandate("finance.md");
 }
