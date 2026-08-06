@@ -308,6 +308,13 @@ export async function autoGatherReviews(
           return doc.markdown ?? "";
         },
       ],
+      // Last-resort engines, tried only if the three above all fail (JS-heavy
+      // pages crawl4ai/scrapling/firecrawl can't render, or ones actively
+      // blocking headless fetches) — selenium drives a real Chrome instance,
+      // scrapy is a plain HTTP+CSS/XPath fetch. Both were wired into the
+      // Python scraper service but never actually called from here before.
+      ["selenium", () => scrapeWithPythonService(companyOrLink, "selenium")],
+      ["scrapy", () => scrapeWithPythonService(companyOrLink, "scrapy")],
     ] as const) {
       const step = await tryStep(label, fn);
       if (step) {

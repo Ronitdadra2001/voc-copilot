@@ -16,11 +16,21 @@ interface Provider {
   call: (opts: ChatOptions) => Promise<string>;
 }
 
+// Explicit cap on all three providers. Without this, OpenRouter's default
+// max_tokens for gpt-4o-mini (16384) gets requested up front regardless of
+// how much the response actually needs — confirmed in practice this made
+// OpenRouter fail outright ("requested up to 16384 tokens, but can only
+// afford 14981") even though the account had real credit, just not enough
+// for the unrequested default ceiling. Our JSON responses run a few KB;
+// 4096 output tokens is comfortably more than any pass needs.
+const MAX_OUTPUT_TOKENS = 4096;
+
 async function callGroq({ messages, jsonMode, temperature = 0.3 }: ChatOptions) {
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     messages,
     temperature,
+    max_tokens: MAX_OUTPUT_TOKENS,
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
   });
   const content = completion.choices[0]?.message?.content;
@@ -33,6 +43,7 @@ async function callOpenAI({ messages, jsonMode, temperature = 0.3 }: ChatOptions
     model: "gpt-4o-mini",
     messages,
     temperature,
+    max_tokens: MAX_OUTPUT_TOKENS,
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
   });
   const content = completion.choices[0]?.message?.content;
@@ -45,6 +56,7 @@ async function callOpenRouter({ messages, jsonMode, temperature = 0.3 }: ChatOpt
     model: "openai/gpt-4o-mini",
     messages,
     temperature,
+    max_tokens: MAX_OUTPUT_TOKENS,
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
   });
   const content = completion.choices[0]?.message?.content;
