@@ -57,12 +57,33 @@ function looksLikeJunkContent(text: string): boolean {
   return JUNK_CONTENT_SIGNATURES.some((sig) => head.includes(sig));
 }
 
+// A bare domain typed without a scheme (e.g. "ubonindia.com" — the common
+// case, since most people don't type "https://") has no protocol, so
+// `new URL()` throws and the whole string, dot-com suffix included, used to
+// fall through as a literal "company name." That literal ".com" then
+// corrupted App Store name-matching downstream (nameLooksRelated in
+// appReviews.ts treated the stray word "com" as a real match signal,
+// false-matching brand-unrelated apps whose own name happens to contain
+// "com," e.g. "Sangam.com" — confirmed in practice). Only attempt the
+// scheme-less parse when the string actually looks like a domain (no
+// spaces, has a dot, plausible TLD) so a genuine bare company name like
+// "Nike Inc" or "Ubon" is never misread as a URL.
+const BARE_DOMAIN_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+(?:\/\S*)?$/i;
+
 function isUrl(input: string): URL | null {
+  const trimmed = input.trim();
   try {
-    const parsed = new URL(input);
+    const parsed = new URL(trimmed);
     if (parsed.protocol === "http:" || parsed.protocol === "https:") return parsed;
     return null;
   } catch {
+    if (BARE_DOMAIN_PATTERN.test(trimmed)) {
+      try {
+        return new URL(`https://${trimmed}`);
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
 }

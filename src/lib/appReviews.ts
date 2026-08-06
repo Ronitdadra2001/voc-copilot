@@ -35,18 +35,30 @@ function parseAppStoreIdentifier(input: string): { productId?: string; appName?:
   return { appName: input.trim() };
 }
 
+// Fragments that are technically >=3 chars but carry zero brand-identifying
+// signal — TLD/domain debris (confirmed bug: an un-normalized "ubonindia.com"
+// leaked "com" into the word list here, which then false-matched "Sangam.com"
+// — a totally unrelated matrimonial app — since its name literally contains
+// "com") plus generic legal-entity/country words too common to distinguish
+// anything. A single-word match against one of these is never sufficient
+// evidence of a real brand match.
+const JUNK_MATCH_WORDS = new Set([
+  "com", "co", "in", "org", "net", "www", "http", "https",
+  "inc", "ltd", "llc", "pvt", "india", "app", "the", "and",
+]);
+
 /** True if `candidate` plausibly refers to `query` — neither store's own
  * "name search" can be trusted blindly (confirmed in practice: Apify's Play
  * Store search and the App Store actor's app_name search both silently
  * matched to a completely unrelated app rather than returning nothing for a
  * brand with no real app). Word-level containment in either direction,
- * case-insensitive. */
+ * case-insensitive, excluding junk/TLD words that carry no real signal. */
 function nameLooksRelated(query: string, candidate: string): boolean {
   const q = query.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
   const c = candidate.toLowerCase().replace(/[^a-z0-9\s]/g, " ").trim();
   if (!q || !c) return false;
   if (c.includes(q) || q.includes(c)) return true;
-  const qWords = q.split(/\s+/).filter((w) => w.length >= 3);
+  const qWords = q.split(/\s+/).filter((w) => w.length >= 3 && !JUNK_MATCH_WORDS.has(w));
   return qWords.some((w) => c.includes(w));
 }
 
