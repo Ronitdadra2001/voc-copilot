@@ -4,12 +4,13 @@ export type PythonEngine = "crawl4ai" | "scrapling" | "scrapegraph" | "selenium"
 
 export async function scrapeWithPythonService(
   url: string,
-  engine: PythonEngine
+  engine: PythonEngine,
+  options?: { scroll?: boolean }
 ): Promise<string> {
   const res = await fetch(`${SCRAPER_SERVICE_URL}/scrape`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url, engine }),
+    body: JSON.stringify({ url, engine, scroll: options?.scroll ?? false }),
   });
   const data = await res.json();
   if (!res.ok) {

@@ -1,52 +1,98 @@
 @import "tailwindcss";
 
 :root {
-  /* Data-Dense Dashboard palette, from the /uiux skill's design-system
-     recommendation for this app type — accent adjusted for WCAG 3:1. */
-  --background: #ffffff;
-  --foreground: #1e3a8a;
   --color-primary: #1e40af;
+  --color-on-primary: #ffffff;
+  --color-secondary: #3b82f6;
   --color-accent: #d97706;
+  --color-background: #f8fafc;
+  --color-foreground: #1e3a8a;
+  --color-muted: #e9eef6;
+  --color-border: #dbeafe;
+  --color-destructive: #dc2626;
+  --color-success: #059669;
+  --color-ring: #1e40af;
+  /* --font-sans / --font-mono are defined by next/font in layout.tsx (Fira
+     Sans / Fira Code, self-hosted) via the html element's class — not
+     redeclared here, so there's exactly one source of truth for them. */
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-mono);
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-primary: #60a5fa;
+    --color-on-primary: #0b1220;
+    --color-secondary: #93c5fd;
+    --color-accent: #fbbf24;
+    --color-background: #0b1220;
+    --color-foreground: #e2e8f0;
+    --color-muted: #17223a;
+    --color-border: #23324f;
+    --color-destructive: #f87171;
+    --color-success: #34d399;
+    --color-ring: #60a5fa;
+  }
 }
 
-/* This app is light-themed throughout (hardcoded white/slate-100 surfaces),
-   so we don't auto-flip to a dark foreground here — doing so left body text
-   near-white against those light surfaces, making typed text unreadable. */
+* {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 180ms;
+  transition-timing-function: ease-out;
+}
 
 body {
-  background: var(--background);
-  color: #0f172a;
-  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
-}
-
-input,
-textarea,
-select {
-  color: #0f172a;
-}
-
-input::placeholder,
-textarea::placeholder {
-  color: #94a3b8;
-}
-
-/* Recommended pre-delivery checklist item: visible, smooth hover transitions
-   on every clickable element (150-300ms), not just ad-hoc per-component. */
-button,
-a {
-  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  button,
-  a {
-    transition: none;
+  * {
+    transition: none !important;
+    animation: none !important;
   }
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+/* Reusable dashboard surface tokens — swapped in for the old hardcoded
+   slate/white classes so the whole app follows the Data-Dense Dashboard
+   design system and repaints correctly in dark mode. */
+.card {
+  background-color: var(--color-on-primary);
+  border: 1px solid var(--color-border);
+  border-radius: 0.5rem;
+}
+
+.card-label {
+  color: var(--color-foreground);
+  opacity: 0.6;
+}
+
+.text-fg {
+  color: var(--color-foreground);
+}
+
+.text-fg-muted {
+  color: var(--color-foreground);
+  opacity: 0.75;
+}
+
+.text-fg-soft {
+  color: var(--color-foreground);
+  opacity: 0.55;
+}
+
+.divider {
+  border-color: var(--color-border);
+}
+
+.badge-accent {
+  color: var(--color-primary);
+}
+
+.skeleton {
+  background-color: var(--color-muted);
 }

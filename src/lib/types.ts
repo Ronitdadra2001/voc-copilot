@@ -1,6 +1,9 @@
 export type Direction = "competitor" | "own";
 
-export interface Theme {
+/** A complaint cluster found directly in the raw review text — the input to
+ * the report step, not the final output. Named plainly (e.g. "Missing
+ * charging cable"), never as an abstract "theme". */
+export interface RawIssue {
   title: string;
   mention_count: number;
   pct_of_reviews: number;
@@ -15,7 +18,7 @@ export interface Theme {
 export interface AnalysisResult {
   summary: string;
   total_reviews_analyzed: number;
-  themes: Theme[];
+  issues: RawIssue[];
 }
 
 export interface Analysis {
@@ -31,6 +34,30 @@ export interface Analysis {
   created_at: string;
 }
 
+/** One concrete, actionable finding — evidence, a costed fix, and an
+ * estimated impact. Named directly (e.g. "Missing charging cable in the
+ * box"), never as an abstract "theme". Replaces the old lows/product_roadmap/
+ * roadmap split: one issue, one place, one thing to actually do about it. */
+export interface Issue {
+  /** The issue itself, plainly named — never prefixed "Theme:" or similar. */
+  title: string;
+  pct_of_reviews: number;
+  at_risk: boolean;
+  /** 1-3 real quoted/grounded bullets proving this issue is real. */
+  evidence: string[];
+  /** 2-4 concrete, sequenced steps to fix it — cheapest/free step first
+   * (Consultant Engine's cheapest-fix-first doctrine). */
+  fix: string[];
+  /** What the fix costs to execute — a rupee/dollar estimate, "engineering
+   * time only", or "$0 — config/policy change", whichever is honest. */
+  cost: string;
+  /** A modeled, assumption-stated estimate of what fixing this is worth —
+   * never a bare invented number (Guesstimate framework). */
+  impact: string;
+  metric_to_track: string;
+  priority: "now" | "near" | "far";
+}
+
 export interface DashboardReport {
   /** Direct-answer summary — restates what the reviews show, or answers the
    * user's specific question verbatim if one was asked at intake. Carried
@@ -38,23 +65,16 @@ export interface DashboardReport {
   summary: string;
   metrics: {
     total_reviews: number;
-    theme_count: number;
-    at_risk_theme_count: number;
-    top_theme_title: string | null;
-    top_theme_pct: number | null;
+    issue_count: number;
+    at_risk_issue_count: number;
+    top_issue_title: string | null;
+    top_issue_pct: number | null;
   };
   highs: { label: string; detail: string }[];
-  /** kano: Must-be/Performance/Delighter classification (finance/PM
-   * framework) — Must-be violations (crashes, core-function failures) are
-   * floor issues to fix immediately; Performance issues scale with effort;
-   * Delighters are absent-but-not-fatal. */
-  lows: {
-    label: string;
-    detail: string;
-    pct: number;
-    at_risk: boolean;
-    kano: "must-be" | "performance" | "delighter";
-  }[];
+  /** At most 3-4 issues, ranked by pct_of_reviews/at-risk severity — a short,
+   * unambiguous list of what to actually work on, not a longer theme
+   * dashboard. */
+  issues: Issue[];
 
   /** Porter's Five Forces — qualitative, grounded only in what the review
    * data and named-competitor count actually show (e.g. rivalry intensity
@@ -77,26 +97,6 @@ export interface DashboardReport {
     points_of_difference: string[];
     points_of_parity: string[];
   };
-
-  /** Product roadmap scored with RICE (slide/PM frameworks), not just a flat
-   * Now/Near/Far tag — grounded in specific themes. */
-  product_roadmap: {
-    action: string;
-    reach: number;
-    impact: number;
-    confidence: number;
-    effort: number;
-    score: number;
-    rationale: string;
-    /** 2-4 concrete steps to actually execute the action — not a restatement
-     * of the score. Drawn from the Consultant Engine's cheapest-fix-first
-     * doctrine and instrumentation contract: what to do first (usually free/
-     * cheap), what to build/change, and what to measure to know it worked. */
-    how_to_implement: string[];
-    /** The single metric to track, its current baseline (from the review
-     * data if inferable, else "not measured yet"), and a target. */
-    metric_to_track: string;
-  }[];
 
   /** Finance section — own company's real findings plus, per named
    * competitor, their real financial findings and an honest comparison.
@@ -123,13 +123,6 @@ export interface DashboardReport {
       assumptions: string[];
     };
   };
-
-  /** Legacy flat Now/Near/Far view, kept for the compact in-app dashboard. */
-  roadmap: {
-    priority: "now" | "near" | "far";
-    action: string;
-    rationale: string;
-  }[];
 
   /** Brand & consumer-behavior diagnosis (bhupesh CBBE/node-word/ESM
    * frameworks) — grounded only in review evidence; every field must say

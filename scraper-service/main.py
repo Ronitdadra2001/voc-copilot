@@ -10,10 +10,20 @@ load_dotenv()
 app = FastAPI(title="VoC Copilot Scraper Service")
 
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY", "")
+# Surfsky (or any rotating-proxy provider) gateway, full connection string
+# e.g. "http://user:key@gateway.surfsky.io:port" — get the exact host/port from
+# the provider's dashboard, this is not something to guess. Unset = no proxy,
+# every scraper below falls back to a direct connection exactly as before.
+PROXY_URL = os.environ.get("SURFSKY_PROXY_URL", "")
 
 
 class ScrapeRequest(BaseModel):
     url: HttpUrl
+    # For pages whose real content only appears after scrolling (Google Play's
+    # reviews section lazy-loads via infinite scroll — a plain fetch sees an
+    # empty shell, confirmed in practice). Off by default since scrolling
+    # every page would just slow down ordinary scrapes for no benefit.
+    scroll: bool = False
 
 
 class ScrapeGraphRequest(BaseModel):
@@ -34,11 +44,22 @@ def health():
 
 @app.post("/scrape/crawl4ai", response_model=ScrapeResponse)
 async def scrape_crawl4ai(req: ScrapeRequest):
-    from crawl4ai import AsyncWebCrawler
+    from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig
 
     try:
-        async with AsyncWebCrawler() as crawler:
-            result = await crawler.arun(url=str(req.url))
+        browser_config = BrowserConfig(proxy=PROXY_URL) if PROXY_URL else None
+        run_config = (
+            CrawlerRunConfig(
+                scan_full_page=True,
+                max_scroll_steps=15,
+                scroll_delay=0.4,
+                page_timeout=45000,
+            )
+            if req.scroll
+            else None
+        )
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            result = await crawler.arun(url=str(req.url), config=run_config)
         if not result.success:
             raise HTTPException(status_code=502, detail=result.error_message or "crawl4ai failed")
         return ScrapeResponse(
@@ -139,7 +160,10 @@ def scrape_scrapy(req: ScrapeRequest):
     from scrapy import Selector
 
     try:
-        resp = requests.get(str(req.url), timeout=30, headers={"User-Agent": "Mozilla/5.0"})
+        proxies = {"http": PROXY_URL, "https": PROXY_URL} if PROXY_URL else None
+        resp = requests.get(
+            str(req.url), timeout=30, headers={"User-Agent": "Mozilla/5.0"}, proxies=proxies
+        )
         resp.raise_for_status()
         sel = Selector(text=resp.text)
         texts = sel.xpath("//body//text()[not(ancestor::script) and not(ancestor::style)]").getall()
@@ -155,12 +179,13 @@ EngineName = Literal["crawl4ai", "scrapling", "scrapegraph", "selenium", "scrapy
 class UnifiedScrapeRequest(BaseModel):
     url: HttpUrl
     engine: EngineName = "crawl4ai"
+    scroll: bool = False
 
 
 @app.post("/scrape", response_model=ScrapeResponse)
 async def scrape_unified(req: UnifiedScrapeRequest):
     if req.engine == "crawl4ai":
-        return await scrape_crawl4ai(ScrapeRequest(url=req.url))
+        return await scrape_crawl4ai(ScrapeRequest(url=req.url, scroll=req.scroll))
     if req.engine == "scrapling":
         return await scrape_scrapling(ScrapeRequest(url=req.url))
     if req.engine == "scrapegraph":

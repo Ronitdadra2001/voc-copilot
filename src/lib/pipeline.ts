@@ -1,9 +1,15 @@
 import { z } from "zod";
 import { chatCompletion } from "./llm";
-import { getKnowledgeBase } from "./knowledge-base";
+import {
+  getKnowledgeBase,
+  getConsumerBehaviorJourneyKnowledge,
+  getMarketingBrandingKnowledge,
+  getProductKnowledge,
+  getFinanceKnowledge,
+} from "./knowledge-base";
 import type { AnalysisResult, Direction, DashboardReport } from "./types";
 
-const ThemeSchema = z.object({
+const RawIssueSchema = z.object({
   title: z.string(),
   mention_count: z.number().int(),
   pct_of_reviews: z.number(),
@@ -18,7 +24,7 @@ const ThemeSchema = z.object({
 const AnalysisResultSchema = z.object({
   summary: z.string(),
   total_reviews_analyzed: z.number().int(),
-  themes: z.array(ThemeSchema),
+  issues: z.array(RawIssueSchema),
 });
 
 const SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly this shape:
@@ -26,7 +32,7 @@ const SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object (no markdown
 {
   "summary": string,
   "total_reviews_analyzed": integer,
-  "themes": [
+  "issues": [
     {
       "title": string,
       "mention_count": integer,
@@ -45,7 +51,7 @@ const SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object (no markdown
 // syntax, price tags and one-word spec bullets — none of that is a review.
 // Confirmed in practice: splitting such a page naively inflated
 // "total reviews analyzed" to 883 for a brand with a handful of genuine
-// complaints (5, 4, 3 mentions), making every theme's pct_of_reviews read as
+// complaints (5, 4, 3 mentions), making every issue's pct_of_reviews read as
 // a fraction of a percent — mathematically correct given the (wrong)
 // denominator, but meaningless to read. A block only counts as a review if
 // it reads like a sentence someone wrote, not a markdown fragment.
@@ -118,14 +124,14 @@ export async function runAnalysis(
   const system = `You are the analysis engine behind a Voice-of-Customer copilot. Given raw customer reviews, you must:
 
 1. Find the top pain points customers complain about.
-2. Cluster related complaints into specific, named themes (e.g. group "app crashes", "kept freezing", "wouldn't load" into one "Stability" theme) — never output a vague theme like "general dissatisfaction."
-3. Attach the REAL verbatim customer quotes behind each theme (copy exact substrings from the input reviews — do not paraphrase quotes).
-4. Flag at-risk / stated-exit signals per theme ONLY when the reviews in that theme actually contain explicit exit language: "cancelled," "switching to X," "uninstalled," "asking for refund," "never using again." at_risk_signals must quote the exact phrase found — if you cannot quote a real exit-intent phrase from the reviews, at_risk_signals must be an empty array and at_risk must be false. Do NOT default every theme to at_risk=true — most themes are just complaints, not stated exits, and marking all of them at-risk is a fabrication the user has explicitly flagged as wrong. Do not call this "churn" — you cannot observe churn from reviews, only stated exit intent.
-5. For each theme, write ONE recommendation per lens (product, marketing, finance), applying the opinionated frameworks in the knowledge base below. Every recommendation must be specific and quantified where the data allows (cite the mention count/percentage) — never a vague platitude like "improve the experience."
+2. Cluster related complaints into specific, plainly-named issues (e.g. group "app crashes", "kept freezing", "wouldn't load" into one issue named "App stability/crashes") — never output a vague issue like "general dissatisfaction," and never label it as an abstract "theme."
+3. Attach the REAL verbatim customer quotes behind each issue (copy exact substrings from the input reviews — do not paraphrase quotes).
+4. Flag at-risk / stated-exit signals per issue ONLY when the reviews for that issue actually contain explicit exit language: "cancelled," "switching to X," "uninstalled," "asking for refund," "never using again." at_risk_signals must quote the exact phrase found — if you cannot quote a real exit-intent phrase from the reviews, at_risk_signals must be an empty array and at_risk must be false. Do NOT default every issue to at_risk=true — most issues are just complaints, not stated exits, and marking all of them at-risk is a fabrication the user has explicitly flagged as wrong. Do not call this "churn" — you cannot observe churn from reviews, only stated exit intent.
+5. For each issue, write ONE recommendation per lens (product, marketing, finance), applying the opinionated frameworks in the knowledge base below. Every recommendation must be specific and quantified where the data allows (cite the mention count/percentage) — never a vague platitude like "improve the experience."
 
 ${perspective}
 ${questionBlock}
-Rank themes by mention_count descending. Only include themes with at least 2 supporting mentions. pct_of_reviews = mention_count / total_reviews_analyzed * 100, rounded to 1 decimal.
+Rank issues by mention_count descending. Only include issues with at least 2 supporting mentions. pct_of_reviews = mention_count / total_reviews_analyzed * 100, rounded to 1 decimal.
 
 === OPINIONATED KNOWLEDGE BASE (apply these frameworks in your recommendations) ===
 ${knowledgeBase}
@@ -155,32 +161,102 @@ ${SCHEMA_INSTRUCTIONS}`;
   return result.data;
 }
 
-const DashboardReportSchema = z.object({
-  summary: z.string().default(""),
-  metrics: z.object({
-    total_reviews: z.number().int(),
-    theme_count: z.number().int(),
-    at_risk_theme_count: z.number().int(),
-    top_theme_title: z.string().nullable(),
-    top_theme_pct: z.number().nullable(),
-  }),
-  highs: z.array(z.object({ label: z.string(), detail: z.string() })),
-  lows: z.array(
+export interface CompetitorInput {
+  name: string;
+  productFindings: string;
+  financial: { found: boolean; markdown: string };
+}
+
+// ============================================================================
+// Report generation: three deliberate, domain-scoped passes instead of one
+// do-everything call. Confirmed in practice that a single pass with the full
+// knowledge base dumped in produces answers that name-drop frameworks without
+// actually reasoning through them. Splitting into passes forces each domain
+// to be read and applied on its own before the next pass builds on it —
+// consumer behavior/journey first (understand the customer), then marketing/
+// branding and product/finance in parallel (both only need the behavior
+// pass's output, not each other's).
+// ============================================================================
+
+function condenseIssuesForPrompt(analysisResult: AnalysisResult) {
+  return analysisResult.issues.map((t) => ({
+    title: t.title,
+    mention_count: t.mention_count,
+    pct_of_reviews: t.pct_of_reviews,
+    at_risk: t.at_risk,
+    at_risk_signals: t.at_risk_signals,
+    // Real verbatim quotes — the only legitimate source for evidence bullets
+    // downstream. Without these, later passes have nothing to cite and were
+    // confirmed in practice to leave "evidence" empty rather than inventing
+    // one — better than fabricating, but still a compliance gap this closes.
+    quotes: t.quotes.slice(0, 3),
+    product_recommendation: t.product_recommendation.slice(0, 200),
+    marketing_recommendation: t.marketing_recommendation.slice(0, 200),
+    finance_recommendation: t.finance_recommendation.slice(0, 200),
+  }));
+}
+
+const BehaviorJourneySchema = z.object({
+  issues: z.array(
     z.object({
-      label: z.string(),
-      detail: z.string(),
-      pct: z.number(),
-      at_risk: z.boolean(),
-      kano: z.enum(["must-be", "performance", "delighter"]),
+      title: z.string(),
+      journey_stage: z.string(),
+      behavior_insight: z.string(),
     })
   ),
-  porters_five_forces: z.object({
-    rivalry: z.string(),
-    threat_of_new_entrants: z.string(),
-    threat_of_substitutes: z.string(),
-    buyer_power: z.string(),
-    supplier_power: z.string(),
-  }),
+});
+type BehaviorJourneyResult = z.infer<typeof BehaviorJourneySchema>;
+
+/** Pass 1 — Consumer Behavior & Customer Journey. Read this domain FIRST:
+ * every downstream pass (branding, product fixes) should be grounded in
+ * understanding why the customer reacted the way they did and where in
+ * their journey it happened, not just what they said. */
+async function runConsumerBehaviorJourneyPass(
+  companyName: string,
+  analysisResult: AnalysisResult
+): Promise<BehaviorJourneyResult> {
+  if (analysisResult.issues.length === 0) return { issues: [] };
+  const knowledgeBase = getConsumerBehaviorJourneyKnowledge();
+
+  const system = `You are reasoning through ONE lens only: consumer behavior and customer journey — for "${companyName}". Do not produce a final report. For each issue below, determine:
+- "journey_stage": where in the customer's path this breaks (e.g. "discover", "consider/evaluate", "purchase/checkout", "onboarding/first-use", "core use", "support/service", "renewal/advocacy") — pick the stage the quotes actually describe, not a guess.
+- "behavior_insight": one sentence applying the attitude-function framework from the knowledge base below (utilitarian / knowledge-object-appraisal / ego-defensive / value-expressive) — name WHICH function is damaged and why that changes how serious this is, grounded in the actual quotes for that issue. Never invent a behavioral claim the quotes don't support — if the quotes are too thin to diagnose an attitude function, say the evidence is limited rather than forcing one.
+
+=== CONSUMER BEHAVIOR + CUSTOMER JOURNEY KNOWLEDGE ===
+${knowledgeBase}
+
+=== ISSUES (from the completed review analysis) ===
+${JSON.stringify(condenseIssuesForPrompt(analysisResult), null, 2)}
+
+Respond with ONLY a single JSON object (no markdown fences, no commentary):
+{ "issues": [{ "title": string, "journey_stage": string, "behavior_insight": string }] }
+One entry per issue above, "title" must match exactly.`;
+
+  const content = await chatCompletion({
+    messages: [{ role: "system", content: system }],
+    jsonMode: true,
+    temperature: 0.2,
+  });
+
+  const parsed = extractJson(content);
+  const result = BehaviorJourneySchema.safeParse(parsed);
+  if (!result.success) {
+    // This pass is context for the ones that follow, not user-facing output
+    // — degrade gracefully to "no behavioral grounding yet" rather than
+    // failing the whole report over an intermediate pass.
+    return { issues: [] };
+  }
+  return result.data;
+}
+
+function behaviorContextBlock(behavior: BehaviorJourneyResult): string {
+  if (behavior.issues.length === 0) {
+    return "(consumer-behavior/journey pass returned nothing — proceed without this grounding rather than inventing it)";
+  }
+  return JSON.stringify(behavior.issues, null, 2);
+}
+
+const GtmBrandSchema = z.object({
   gtm: z.object({
     segment: z.string(),
     target: z.string(),
@@ -188,19 +264,141 @@ const DashboardReportSchema = z.object({
     points_of_difference: z.array(z.string()),
     points_of_parity: z.array(z.string()),
   }),
-  product_roadmap: z.array(
-    z.object({
-      action: z.string(),
-      reach: z.number(),
-      impact: z.number(),
-      confidence: z.number(),
-      effort: z.number(),
-      score: z.number(),
-      rationale: z.string(),
-      how_to_implement: z.array(z.string()),
-      metric_to_track: z.string(),
-    })
-  ),
+  brand: z.object({
+    node_word: z.string().nullable(),
+    node_word_evidence: z.string(),
+    weakest_cbbe_layer: z.string(),
+    weakest_cbbe_layer_evidence: z.string(),
+    personas: z.array(
+      z.object({
+        name: z.string(),
+        context: z.string(),
+        goals: z.string(),
+        pain_points: z.string(),
+      })
+    ),
+    campaign: z
+      .object({ enemy: z.string(), stand: z.string(), mantra: z.string() })
+      .nullable(),
+  }),
+});
+type GtmBrandResult = z.infer<typeof GtmBrandSchema>;
+
+const DEFAULT_GTM_BRAND: GtmBrandResult = {
+  gtm: {
+    segment: "insufficient data",
+    target: "insufficient data",
+    position: "insufficient data",
+    points_of_difference: [],
+    points_of_parity: [],
+  },
+  brand: {
+    node_word: null,
+    node_word_evidence: "insufficient data",
+    weakest_cbbe_layer: "unknown",
+    weakest_cbbe_layer_evidence: "insufficient data",
+    personas: [],
+    campaign: null,
+  },
+};
+
+/** Pass 2 — Marketing & Branding. Runs in parallel with the product/finance
+ * pass; both only depend on the behavior/journey pass, not on each other. */
+async function runMarketingBrandingPass(
+  companyName: string,
+  direction: Direction,
+  analysisResult: AnalysisResult,
+  competitors: CompetitorInput[],
+  behavior: BehaviorJourneyResult
+): Promise<GtmBrandResult> {
+  if (analysisResult.issues.length === 0) return DEFAULT_GTM_BRAND;
+  const knowledgeBase = getMarketingBrandingKnowledge();
+
+  const competitorsBlock = competitors.length
+    ? competitors
+        .map(
+          (c) => `Competitor: ${c.name}
+Product/positioning context: ${c.productFindings.slice(0, 700) || "(none found)"}
+Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(none found)"}`
+        )
+        .join("\n\n")
+    : "(no named competitors found)";
+
+  const system = `You are reasoning through ONE lens only: marketing and branding — for "${companyName}" (direction: ${direction}). Apply the STP/3C/POD-POP/CBBE/node-word/Enemy-Stand-Mantra frameworks in the knowledge base below. Tone: plain language first (what the customer actually experiences), THEN name the framework — never framework-name-dropping with no plain-English anchor.
+
+- "gtm": segment/target/position inferred from the product/reviews; points_of_difference = things this product does that named competitors' context does NOT show (grounded in competitor data below, never invented); points_of_parity = things reviews show this product does that competitors also seem to do. Empty arrays if no competitor context exists — do not invent competitor behavior.
+- "brand.node_word": the single word this brand owns in customers' minds, ONLY if the evidence supports one. null + "insufficient data" if no clear word emerges — do not force one.
+- "brand.weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — whichever the review evidence shows is weakest.
+- "brand.personas": 2-3 ONLY if the reviews contain enough concrete detail to build one honestly — no invented demographics. Empty array if reviews are too thin.
+- "brand.campaign": Enemy-Stand-Mantra ONLY if a real customer pain point clearly justifies one (enemy = the ideology/behavior/condition the brand fights, NOT a competitor). null if unjustified.
+
+=== MARKETING & BRANDING KNOWLEDGE ===
+${knowledgeBase}
+
+=== ISSUES (from the completed review analysis) ===
+${JSON.stringify(condenseIssuesForPrompt(analysisResult), null, 2)}
+
+=== CONSUMER BEHAVIOR & JOURNEY GROUNDING (from the prior pass — use this, don't re-derive it) ===
+${behaviorContextBlock(behavior)}
+
+=== NAMED COMPETITORS (empty = none found — do not invent a competitor) ===
+${competitorsBlock}
+
+Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly:
+{
+  "gtm": { "segment": string, "target": string, "position": string, "points_of_difference": string[], "points_of_parity": string[] },
+  "brand": {
+    "node_word": string | null, "node_word_evidence": string,
+    "weakest_cbbe_layer": string, "weakest_cbbe_layer_evidence": string,
+    "personas": [{ "name": string, "context": string, "goals": string, "pain_points": string }],
+    "campaign": { "enemy": string, "stand": string, "mantra": string } | null
+  }
+}`;
+
+  const content = await chatCompletion({
+    messages: [{ role: "system", content: system }],
+    jsonMode: true,
+    temperature: 0.2,
+  });
+
+  const parsed = extractJson(content);
+  const result = GtmBrandSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(`Marketing/branding pass response didn't match expected schema: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+const IssueSchema = z.object({
+  title: z.string(),
+  pct_of_reviews: z.number(),
+  at_risk: z.boolean(),
+  evidence: z.array(z.string()),
+  fix: z.array(z.string()),
+  cost: z.string(),
+  impact: z.string(),
+  metric_to_track: z.string(),
+  priority: z.enum(["now", "near", "far"]),
+});
+
+const ProductFinanceSchema = z.object({
+  summary: z.string().default(""),
+  metrics: z.object({
+    total_reviews: z.number().int(),
+    issue_count: z.number().int(),
+    at_risk_issue_count: z.number().int(),
+    top_issue_title: z.string().nullable(),
+    top_issue_pct: z.number().nullable(),
+  }),
+  highs: z.array(z.object({ label: z.string(), detail: z.string() })),
+  issues: z.array(IssueSchema).max(4),
+  porters_five_forces: z.object({
+    rivalry: z.string(),
+    threat_of_new_entrants: z.string(),
+    threat_of_substitutes: z.string(),
+    buyer_power: z.string(),
+    supplier_power: z.string(),
+  }),
   finance: z.object({
     own: z.object({ found: z.boolean(), findings: z.array(z.string()) }),
     competitors: z.array(
@@ -218,87 +416,23 @@ const DashboardReportSchema = z.object({
       assumptions: z.array(z.string()),
     }),
   }),
-  roadmap: z.array(
-    z.object({
-      priority: z.enum(["now", "near", "far"]),
-      action: z.string(),
-      rationale: z.string(),
-    })
-  ),
-  brand: z.object({
-    node_word: z.string().nullable(),
-    node_word_evidence: z.string(),
-    weakest_cbbe_layer: z.string(),
-    weakest_cbbe_layer_evidence: z.string(),
-    personas: z.array(
-      z.object({
-        name: z.string(),
-        context: z.string(),
-        goals: z.string(),
-        pain_points: z.string(),
-      })
-    ),
-    campaign: z
-      .object({
-        enemy: z.string(),
-        stand: z.string(),
-        mantra: z.string(),
-      })
-      .nullable(),
-  }),
 });
+type ProductFinanceResult = z.infer<typeof ProductFinanceSchema>;
 
-const DASHBOARD_SCHEMA_INSTRUCTIONS = `Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly this shape:
-
-{
-  "metrics": {
-    "total_reviews": integer, "theme_count": integer, "at_risk_theme_count": integer,
-    "top_theme_title": string | null, "top_theme_pct": number | null
-  },
-  "highs": [{ "label": string, "detail": string }],
-  "lows": [{ "label": string, "detail": string, "pct": number, "at_risk": boolean, "kano": "must-be" | "performance" | "delighter" }],
-  "porters_five_forces": {
-    "rivalry": string, "threat_of_new_entrants": string, "threat_of_substitutes": string,
-    "buyer_power": string, "supplier_power": string
-  },
-  "gtm": {
-    "segment": string, "target": string, "position": string,
-    "points_of_difference": string[], "points_of_parity": string[]
-  },
-  "product_roadmap": [
-    { "action": string, "reach": number, "impact": number, "confidence": number, "effort": number, "score": number, "rationale": string, "how_to_implement": string[], "metric_to_track": string }
-  ],
-  "finance": {
-    "own": { "found": boolean, "findings": string[] },
-    "competitors": [{ "name": string, "found": boolean, "findings": string[], "comparison": string | null }],
-    "unit_economics_notes": string[],
-    "revenue_at_risk": { "applicable": boolean, "estimate": string | null, "assumptions": string[] }
-  },
-  "roadmap": [{ "priority": "now" | "near" | "far", "action": string, "rationale": string }],
-  "brand": {
-    "node_word": string | null,
-    "node_word_evidence": string,
-    "weakest_cbbe_layer": string,
-    "weakest_cbbe_layer_evidence": string,
-    "personas": [{ "name": string, "context": string, "goals": string, "pain_points": string }],
-    "campaign": { "enemy": string, "stand": string, "mantra": string } | null
-  }
-}`;
-
-export interface CompetitorInput {
-  name: string;
-  productFindings: string;
-  financial: { found: boolean; markdown: string };
-}
-
-export async function runReport(
+/** Pass 3 — Product Management & Finance. Runs in parallel with the
+ * marketing/branding pass. Produces the actual issues[] (fix/cost/impact/
+ * priority), the metrics rollup, the top-line summary, Porter's Five Forces,
+ * and the finance section. */
+async function runProductFinancePass(
   companyName: string,
   direction: Direction,
   analysisResult: AnalysisResult,
   competitors: CompetitorInput[],
-  ownFinancialContext: string
-): Promise<DashboardReport> {
-  const knowledgeBase = getKnowledgeBase();
+  ownFinancialContext: string,
+  behavior: BehaviorJourneyResult
+): Promise<ProductFinanceResult> {
+  const productKnowledge = getProductKnowledge();
+  const financeKnowledge = getFinanceKnowledge();
 
   const competitorsBlock = competitors.length
     ? competitors
@@ -310,51 +444,44 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
         .join("\n\n")
     : "(no named competitors found)";
 
-  const system = `You produce a metrics-first dashboard + report (NOT prose, no executive summary) from a completed Voice-of-Customer analysis for "${companyName}" (direction: ${direction}). This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
+  const system = `You are reasoning through TWO lenses: product management, and finance — for "${companyName}" (direction: ${direction}). This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
 
-1. "metrics" — total_reviews = total_reviews_analyzed, theme_count = number of themes, at_risk_theme_count = count of at_risk themes, top_theme_title/pct = highest pct_of_reviews theme (null if none).
-2. "highs" — concrete positives ONLY if the data supports them; empty array if genuinely none — never invent one.
-3. "lows" — one entry per theme, at_risk first then by pct_of_reviews descending. "kano" (Kano model): "must-be" for baseline/core-function failures (crashes, can't complete a core task, billing/refund failures — absence of these causes major dissatisfaction, they are not "nice to haves"), "performance" for issues where more-is-better (speed, support responsiveness, feature completeness), "delighter" for issues that are absent-but-not-fatal (missing polish, minor UX friction). Must-be violations should dominate the "now" priority in the roadmap below.
-4. "porters_five_forces" — qualitative, one sentence each, grounded ONLY in what's actually in front of you. NAMED COMPETITORS below is real, verified data — use it, do not default to "insufficient data" when it's non-empty:
-    - rivalry: 0 named competitors → "competitive intensity can't be assessed from available data." 1+ named competitors → you MUST name them and describe the rivalry qualitatively from what their product/financial context actually shows (e.g. "Moderate-to-high — Swiggy is a named, well-funded direct competitor in the same category, per public comparison sources"). Never say "insufficient data" when at least one real competitor name is present below.
-    - threat_of_new_entrants/substitutes/buyer_power/supplier_power = reasoned from the product category, review evidence, AND named competitors (e.g. many complaints about pricing → high buyer power; a funded direct competitor exists → substitution risk is real, say so). Only say "insufficient data" for a force when there is truly nothing below to reason from — not as a default when data exists but requires synthesis.
-5. "gtm" (bhupesh GTM/branding frameworks: STP + 3C positioning + POD/POP) — segment/target/position inferred from the product description and review evidence; points_of_difference = things this product does that named competitors' context does NOT show (grounded in the competitor product context below, not invented); points_of_parity = things reviews show this product does that competitors also seem to do. If no competitor context exists, points_of_difference/points_of_parity can be empty arrays — do not invent competitor behavior.
-6. "product_roadmap" (RICE prioritization) — one row per major theme/opportunity: reach (0-100 estimate from pct_of_reviews), impact (1-3), confidence (0-1, lower if evidence is thin), effort (1-3 person-months estimate), score = (reach*impact*confidence)/effort rounded to 1 decimal. rationale must cite the specific theme/data.
-   - "how_to_implement": 2-4 concrete, sequenced steps to actually execute the action — not a restatement of the rationale. Apply the Consultant Engine's cheapest-fix-first doctrine: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is addressed (the Sequencing Law — never recommend advertising into a broken experience). Each step must be something a named role could actually start on Monday (e.g. "Set up a dedicated 'order accuracy' ticket tag in the support queue and route it to a senior agent" — not "improve support").
-   - "metric_to_track": one sentence naming the single number that proves this worked, its baseline if inferable from the review data (e.g. "currently 55.6% of reviews cite this"), and a target.
-7. "finance" — own.found/competitors[].found must be true ONLY when real text is present in the sections below; findings must be traceable to that text (never invent a number). "comparison" per competitor: a factual one-sentence comparison of the competitor's real financial standing vs this company's, using ONLY numbers present in both texts — if either side lacks real numbers, comparison MUST be null (do not guess who's "winning"). unit_economics_notes: apply finance-lens reasoning (relevant cost, unit economics, cost-of-problem from the at-risk themes) ONLY where real figures support it; otherwise leave empty.
-8. "finance.revenue_at_risk" (Guesstimate framework: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; if applicable, estimate = a modeled dollar range computed as: stated revenue × (sum of at-risk themes' pct_of_reviews as a proxy for the share of customers at risk of churning), with assumptions listing every step of that logic explicitly (e.g. "using X% at-risk mention share as a proxy for at-risk revenue share — an approximation, not a measured churn rate"). If no real revenue figure was found, applicable=false, estimate=null, assumptions=[] — do not compute a number from nothing.
-9. "roadmap" — legacy compact view: Impact-Effort Now/Near/Far, each citing its source theme/data. Must-be Kano violations belong in "now".
-10. "brand" (bhupesh consumer-behavior/branding frameworks — CBBE, node word, ESM) — grounded ONLY in review language and competitor context below, never invented demographics or claims:
-    - "node_word": the single word this brand owns in customers' minds, if the evidence supports one (e.g. reviews/positioning repeatedly signal "reliable" or "cheap"). null if no clear word emerges — do not force one.
-    - "node_word_evidence": one sentence citing what in the reviews/competitor text supports it, or "insufficient data" if node_word is null.
-    - "weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — pick whichever the review evidence shows is weakest (e.g. many reviews are surprised the company exists = salience; many function complaints = performance; complaints about feeling cheap despite working fine = imagery; no repeat-purchase/advocacy language = resonance).
-    - "weakest_cbbe_layer_evidence": one sentence citing the specific review pattern that shows this.
-    - "personas": 2-3 personas ONLY if the reviews contain enough concrete detail (stated use case, role, complaint pattern) to build one honestly — each persona's context/goals/pain_points must trace to actual review language, not invented demographics (no fabricated age/income/city unless a review states it). Return an empty array if reviews are too generic/thin to support real personas.
-    - "campaign": an Enemy-Stand-Mantra angle (enemy = the ideology/behavior/condition the brand fights, NOT a competitor; stand = the brand's higher purpose; mantra = a short memorable phrase) ONLY if a real customer pain point in the reviews clearly justifies one. null if the data doesn't support a genuine enemy — do not invent a manufactured one.
+Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an MBA professor explains a case back to a student. Plain, humanized language first (what actually happened to the customer, in one clear sentence), THEN name the framework used to get there.
 
-=== OPINIONATED KNOWLEDGE BASE (finance/marketing/product frameworks) ===
-${knowledgeBase}
+1. "metrics" — total_reviews = total_reviews_analyzed, issue_count = number of issues returned, at_risk_issue_count = count of at_risk issues, top_issue_title/pct = highest pct_of_reviews issue (null if none).
+2. "highs" — concrete positives ONLY if the data supports them; empty array if genuinely none.
+3. "issues" — AT MOST 4 items, the top 3-4 by pct_of_reviews/at-risk severity. Rank at_risk issues first, then by pct_of_reviews descending. For each issue:
+   - "title": name the issue plainly and directly (e.g. "Missing charging cable in the box") — NEVER "Theme:" or an abstract category.
+   - "evidence": 1-3 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
+   - "fix": 2-4 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
+   - "cost": a rupee/dollar estimate if reasonably inferable, "engineering time only" for investigation work, or "$0 — config/policy change" if free. Never vague.
+   - "impact": a modeled, assumption-stated estimate (Guesstimate framework from the finance knowledge below) — never a bare invented number.
+   - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
+   - "priority": "now" (0-30 days) for must-fix-first — baseline/core-function failures or at_risk=true — "near" (31-60 days) for real but less urgent, "far" (61-90 days) for lower-severity items.
+4. "porters_five_forces" — qualitative, one sentence each. NAMED COMPETITORS below is real data — use it, do not default to "insufficient data" when non-empty. 0 named competitors → "competitive intensity can't be assessed from available data." 1+ → name them and describe rivalry from what their context actually shows.
+5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: only where real figures support it.
+6. "finance.revenue_at_risk" (Guesstimate framework: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
+7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below).
+
+=== PRODUCT MANAGEMENT KNOWLEDGE ===
+${productKnowledge}
+
+=== FINANCE KNOWLEDGE ===
+${financeKnowledge}
 
 === ANALYSIS RESULT (condensed) ===
 ${JSON.stringify(
   {
     summary: analysisResult.summary,
     total_reviews_analyzed: analysisResult.total_reviews_analyzed,
-    themes: analysisResult.themes.map((t) => ({
-      title: t.title,
-      mention_count: t.mention_count,
-      pct_of_reviews: t.pct_of_reviews,
-      at_risk: t.at_risk,
-      at_risk_signals: t.at_risk_signals,
-      product_recommendation: t.product_recommendation.slice(0, 200),
-      marketing_recommendation: t.marketing_recommendation.slice(0, 200),
-      finance_recommendation: t.finance_recommendation.slice(0, 200),
-    })),
+    issues: condenseIssuesForPrompt(analysisResult),
   },
   null,
   2
 )}
+
+=== CONSUMER BEHAVIOR & JOURNEY GROUNDING (from the prior pass — use this to sequence/target each fix, don't re-derive it) ===
+${behaviorContextBlock(behavior)}
 
 === OWN COMPANY FINANCIAL CONTEXT (empty = none found — do not fabricate) ===
 ${(ownFinancialContext || "(none found)").slice(0, 1200)}
@@ -362,7 +489,20 @@ ${(ownFinancialContext || "(none found)").slice(0, 1200)}
 === NAMED COMPETITORS (empty = none found — do not invent a competitor) ===
 ${competitorsBlock}
 
-${DASHBOARD_SCHEMA_INSTRUCTIONS}`;
+Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly:
+{
+  "summary": string,
+  "metrics": { "total_reviews": integer, "issue_count": integer, "at_risk_issue_count": integer, "top_issue_title": string | null, "top_issue_pct": number | null },
+  "highs": [{ "label": string, "detail": string }],
+  "issues": [{ "title": string, "pct_of_reviews": number, "at_risk": boolean, "evidence": string[], "fix": string[], "cost": string, "impact": string, "metric_to_track": string, "priority": "now" | "near" | "far" }],
+  "porters_five_forces": { "rivalry": string, "threat_of_new_entrants": string, "threat_of_substitutes": string, "buyer_power": string, "supplier_power": string },
+  "finance": {
+    "own": { "found": boolean, "findings": string[] },
+    "competitors": [{ "name": string, "found": boolean, "findings": string[], "comparison": string | null }],
+    "unit_economics_notes": string[],
+    "revenue_at_risk": { "applicable": boolean, "estimate": string | null, "assumptions": string[] }
+  }
+}`;
 
   const content = await chatCompletion({
     messages: [{ role: "system", content: system }],
@@ -371,31 +511,75 @@ ${DASHBOARD_SCHEMA_INSTRUCTIONS}`;
   });
 
   const parsed = extractJson(content);
-  const result = DashboardReportSchema.safeParse(parsed);
+  const result = ProductFinanceSchema.safeParse(parsed);
   if (!result.success) {
-    throw new Error(`Report response didn't match expected schema: ${result.error.message}`);
+    throw new Error(`Product/finance pass response didn't match expected schema: ${result.error.message}`);
   }
-  const report = result.data;
+  return result.data;
+}
+
+export async function runReport(
+  companyName: string,
+  direction: Direction,
+  analysisResult: AnalysisResult,
+  competitors: CompetitorInput[],
+  ownFinancialContext: string
+): Promise<DashboardReport> {
+  // Pass 1 runs alone first — passes 2 and 3 are both grounded in its output,
+  // so it must complete before either starts. This is the deliberate
+  // "understand the customer before prescribing anything" ordering.
+  const behavior = await runConsumerBehaviorJourneyPass(companyName, analysisResult);
+
+  // Passes 2 and 3 are independent of each other — both only need pass 1's
+  // output — so they run concurrently rather than adding latency for no
+  // reason.
+  const [marketingBranding, productFinance] = await Promise.all([
+    runMarketingBrandingPass(companyName, direction, analysisResult, competitors, behavior),
+    runProductFinancePass(companyName, direction, analysisResult, competitors, ownFinancialContext, behavior),
+  ]);
+
+  const report: DashboardReport = {
+    summary: productFinance.summary,
+    metrics: productFinance.metrics,
+    highs: productFinance.highs,
+    issues: productFinance.issues,
+    porters_five_forces: productFinance.porters_five_forces,
+    gtm: marketingBranding.gtm,
+    finance: productFinance.finance,
+    brand: marketingBranding.brand,
+  };
 
   // Hard backstop, not just a prompt instruction: confirmed in practice that
-  // when analysisResult.themes is empty, the model still fabricated a full
-  // RICE roadmap, Kano-tagged action items, and personas out of thin air —
-  // grounded in nothing, since there were no themes to ground them in. A
-  // prompt instruction alone didn't stop it once; force it in code instead
-  // of trusting the model to self-police every time.
-  if (analysisResult.themes.length === 0) {
-    report.lows = [];
-    report.product_roadmap = [];
-    report.roadmap = [];
-    report.metrics.theme_count = 0;
-    report.metrics.at_risk_theme_count = 0;
-    report.metrics.top_theme_title = null;
-    report.metrics.top_theme_pct = null;
+  // the model sometimes left "evidence" empty for every issue after the
+  // first, rather than inventing something — better than fabricating, but
+  // still leaves a card with a fix and no proof. Backfill from the real
+  // verbatim quotes gathered in the analysis step (matched by title) before
+  // ever showing an issue with zero evidence.
+  for (const issue of report.issues) {
+    if (issue.evidence.length > 0) continue;
+    const matched = analysisResult.issues.find((raw) => raw.title === issue.title);
+    if (matched && matched.quotes.length > 0) {
+      issue.evidence = matched.quotes.slice(0, 2);
+    }
+  }
+
+  // Hard backstop, not just a prompt instruction: confirmed in practice that
+  // when analysisResult.issues is empty, the model still fabricated a full
+  // roadmap of costed fixes and personas out of thin air — grounded in
+  // nothing, since there were no issues to ground them in. A prompt
+  // instruction alone didn't stop it once; force it in code instead of
+  // trusting the model to self-police every time.
+  if (analysisResult.issues.length === 0) {
+    report.issues = [];
+    report.metrics.issue_count = 0;
+    report.metrics.at_risk_issue_count = 0;
+    report.metrics.top_issue_title = null;
+    report.metrics.top_issue_pct = null;
     report.brand.personas = [];
     report.brand.node_word = null;
-    report.brand.node_word_evidence = "No review themes were found to derive a brand association from.";
+    report.brand.node_word_evidence = "No review issues were found to derive a brand association from.";
     report.brand.weakest_cbbe_layer = "unknown";
-    report.brand.weakest_cbbe_layer_evidence = "No review themes were found to diagnose brand health from.";
+    report.brand.weakest_cbbe_layer_evidence = "No review issues were found to diagnose brand health from.";
     report.brand.campaign = null;
   }
 

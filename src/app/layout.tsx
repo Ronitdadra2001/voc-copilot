@@ -17,7 +17,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Voice-of-Customer Copilot",
+  title: "How MBA Professors Would Respond",
   description: "Automated competitor review analysis, roadmap, and dashboard reporting.",
 };
 

@@ -13,38 +13,17 @@ const STATUS = {
   good: "#0ca30c",
 };
 
-const PRIORITY_COLOR: Record<DashboardReport["roadmap"][number]["priority"], string> = {
+const PRIORITY_COLOR: Record<DashboardReport["issues"][number]["priority"], string> = {
   now: "bg-red-50 text-red-700 border border-red-200",
   near: "bg-amber-50 text-amber-700 border border-amber-200",
-  far: "bg-slate-100 text-slate-700 border border-slate-200",
+  far: "bg-slate-100 text-fg-muted border divider",
 };
 
-const KANO_LABEL: Record<DashboardReport["lows"][number]["kano"], string> = {
-  "must-be": "Must-Be",
-  performance: "Performance",
-  delighter: "Delighter",
+const PRIORITY_LABEL: Record<DashboardReport["issues"][number]["priority"], string> = {
+  now: "NOW (0-30 days)",
+  near: "NEAR (31-60 days)",
+  far: "FAR (61-90 days)",
 };
-
-const KANO_COLOR: Record<DashboardReport["lows"][number]["kano"], string> = {
-  "must-be": "bg-red-50 text-red-700",
-  performance: "bg-blue-50 text-blue-700",
-  delighter: "bg-slate-100 text-slate-600",
-};
-
-const KANO_TOOLTIP: Record<DashboardReport["lows"][number]["kano"], string> = {
-  "must-be": "Must-Be: a baseline expectation, not a bonus feature — its absence causes major dissatisfaction (e.g. crashes, failed refunds). Fix these first, always.",
-  performance: "Performance: satisfaction scales with how well this works (e.g. speed, support responsiveness) — more improvement here keeps paying off.",
-  delighter: "Delighter: absence isn't usually noticed, but presence creates outsized goodwill — lower priority than Must-Be issues.",
-};
-
-function StatTile({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg p-4">
-      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
-      <p className="text-2xl font-bold text-slate-900 mt-1">{value}</p>
-    </div>
-  );
-}
 
 function InfoTooltip({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
@@ -55,12 +34,16 @@ function InfoTooltip({ text }: { text: string }) {
         aria-label="How these numbers were calculated"
         onClick={() => setOpen((v) => !v)}
         onBlur={() => setOpen(false)}
-        className="h-5 w-5 rounded-full bg-slate-200 text-slate-700 text-xs font-bold hover:bg-slate-300 flex items-center justify-center"
+        className="h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center cursor-pointer"
+        style={{ backgroundColor: "var(--color-muted)", color: "var(--color-foreground)" }}
       >
         i
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 mb-2 w-72 bg-slate-900 text-slate-100 text-xs rounded-md p-3 shadow-lg z-10">
+        <div
+          className="absolute bottom-full right-0 mb-2 w-72 text-xs rounded-md p-3 shadow-lg z-10"
+          style={{ backgroundColor: "var(--color-primary)", color: "var(--color-on-primary)" }}
+        >
           {text}
         </div>
       )}
@@ -80,9 +63,9 @@ function SectionCard({
   children: React.ReactNode;
 }) {
   return (
-    <div className={`bg-white border border-slate-200 rounded-lg p-4 ${className}`}>
+    <div className={`card p-4 ${className}`}>
       <div className="flex items-center justify-between mb-3">
-        <h3 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h3>
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-fg-soft">{title}</h3>
         {info && <InfoTooltip text={info} />}
       </div>
       {children}
@@ -90,8 +73,17 @@ function SectionCard({
   );
 }
 
+function StatTile({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="card p-4">
+      <p className="text-xs uppercase tracking-wide text-fg-soft">{label}</p>
+      <p className="text-2xl font-bold text-fg mt-1">{value}</p>
+    </div>
+  );
+}
+
 function SkeletonBlock({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-slate-200 ${className}`} />;
+  return <div className={`animate-pulse rounded-md skeleton ${className}`} />;
 }
 
 function DashboardSkeleton() {
@@ -103,21 +95,21 @@ function DashboardSkeleton() {
       </div>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="bg-white border border-slate-200 rounded-lg p-4">
+          <div key={i} className="card p-4">
             <SkeletonBlock className="h-3 w-20 mb-2" />
             <SkeletonBlock className="h-7 w-12" />
           </div>
         ))}
       </div>
       {Array.from({ length: 3 }).map((_, i) => (
-        <div key={i} className="bg-white border border-slate-200 rounded-lg p-4 space-y-3">
+        <div key={i} className="card p-4 space-y-3">
           <SkeletonBlock className="h-3 w-40" />
           <SkeletonBlock className="h-4 w-full" />
           <SkeletonBlock className="h-4 w-5/6" />
           <SkeletonBlock className="h-4 w-2/3" />
         </div>
       ))}
-      <p className="text-sm text-slate-500 text-center">
+      <p className="text-sm text-fg-soft text-center">
         Searching reviews, competitors, and financial data — this can take a little while for full competitor research…
       </p>
     </div>
@@ -148,7 +140,7 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
   }
   if (error) {
     return (
-      <div className="bg-white border border-slate-200 rounded-lg shadow-sm p-6 text-red-600">
+      <div className="card shadow-sm p-6 text-red-600">
         {error}
       </div>
     );
@@ -156,8 +148,8 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
   if (!data) return null;
 
   const { report } = data;
-  const maxPct = Math.max(1, ...report.lows.map((l) => l.pct));
-  // Below this, every percentage/RICE score on the page is an artifact of a
+  const maxPct = Math.max(1, ...report.issues.map((i) => i.pct_of_reviews));
+  // Below this, every percentage/score on the page is an artifact of a
   // tiny denominator (e.g. "100%" from 1 of 1 review), not a real pattern —
   // sample-size honesty per the evidence-ladder rule: report direction, not
   // precision, until there's enough data to support it.
@@ -171,10 +163,11 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-slate-900">{data.companyName} — Dashboard</h2>
+        <h2 className="text-xl font-bold text-fg">{data.companyName} — Dashboard</h2>
         <a
           href={`/api/report/${analysisId}/pdf`}
-          className="rounded-md bg-slate-900 text-white px-4 py-2 text-sm font-semibold hover:bg-slate-800"
+          className="rounded-md px-4 py-2 text-sm font-semibold cursor-pointer"
+          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-on-primary)" }}
         >
           Download Full PDF
         </a>
@@ -196,8 +189,11 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       )}
 
       {report.summary && (
-        <div className="bg-slate-900 text-slate-100 rounded-lg p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400 mb-1">
+        <div
+          className="rounded-lg p-4"
+          style={{ backgroundColor: "var(--color-primary)", color: "var(--color-on-primary)" }}
+        >
+          <p className="text-xs font-semibold uppercase tracking-wide opacity-70 mb-1">
             Answer
           </p>
           <p className="text-sm leading-relaxed">{report.summary}</p>
@@ -206,11 +202,11 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <StatTile label="Reviews Analyzed" value={report.metrics.total_reviews} />
-        <StatTile label="Themes Found" value={report.metrics.theme_count} />
-        <StatTile label="At-Risk Themes" value={report.metrics.at_risk_theme_count} />
+        <StatTile label="Issues Found" value={report.metrics.issue_count} />
+        <StatTile label="At-Risk Issues" value={report.metrics.at_risk_issue_count} />
         <StatTile
           label="Top Issue"
-          value={report.metrics.top_theme_title ? `${report.metrics.top_theme_pct}%` : "—"}
+          value={report.metrics.top_issue_title ? `${report.metrics.top_issue_pct}%` : "—"}
         />
       </div>
 
@@ -233,24 +229,22 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       <DashboardCharts report={report} />
 
       <div className="grid xl:grid-cols-2 gap-4">
-        <SectionCard title="Lows — What They're Getting Wrong">
+        <SectionCard title="Issues at a Glance">
           <div className="space-y-2.5">
-            {report.lows.map((low, i) => (
+            {report.issues.map((issue, i) => (
               <div key={i}>
                 <div className="flex items-center justify-between text-sm mb-1">
-                  <span className="font-medium text-slate-900 flex items-center gap-2">
-                    <span title={low.detail} className="cursor-help underline decoration-dotted decoration-slate-400 underline-offset-2">
-                      {low.label}
-                    </span>
+                  <span className="font-medium text-fg flex items-center gap-2">
+                    {issue.title}
                     <span
-                      title={KANO_TOOLTIP[low.kano]}
-                      className={`cursor-help text-[10px] font-semibold px-1.5 py-0.5 rounded ${KANO_COLOR[low.kano]}`}
+                      title={PRIORITY_LABEL[issue.priority]}
+                      className={`cursor-help text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLOR[issue.priority]}`}
                     >
-                      {KANO_LABEL[low.kano]}
+                      {issue.priority.toUpperCase()}
                     </span>
-                    {low.at_risk && (
+                    {issue.at_risk && (
                       <span
-                        title={`Customers used explicit exit language for this issue: ${low.detail}`}
+                        title="Customers used explicit exit language for this issue"
                         className="cursor-help text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
                         style={{ backgroundColor: STATUS.critical }}
                       >
@@ -258,18 +252,17 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
                       </span>
                     )}
                   </span>
-                  <span className="text-slate-600">{low.pct}%</span>
+                  <span className="text-fg-muted">{issue.pct_of_reviews}%</span>
                 </div>
-                <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                <div className="h-2 rounded-full skeleton overflow-hidden">
                   <div
                     className="h-full rounded-full"
                     style={{
-                      width: `${(low.pct / maxPct) * 100}%`,
-                      backgroundColor: low.at_risk ? STATUS.critical : "#94a3b8",
+                      width: `${(issue.pct_of_reviews / maxPct) * 100}%`,
+                      backgroundColor: issue.at_risk ? STATUS.critical : "#94a3b8",
                     }}
                   />
                 </div>
-                <p className="text-xs text-slate-600 mt-1">{low.detail}</p>
               </div>
             ))}
           </div>
@@ -277,11 +270,11 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
 
         <SectionCard title="Highs — What's Working">
           {report.highs.length === 0 ? (
-            <p className="text-sm text-slate-500">No clear positive signal found in the data.</p>
+            <p className="text-sm text-fg-soft">No clear positive signal found in the data.</p>
           ) : (
             <ul className="space-y-1.5">
               {report.highs.map((h, i) => (
-                <li key={i} className="text-sm text-slate-800">
+                <li key={i} className="text-sm text-fg">
                   <span className="font-medium" style={{ color: STATUS.good }}>
                     {h.label}
                   </span>{" "}
@@ -296,7 +289,7 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       <div className="grid xl:grid-cols-2 gap-4">
         {hasForces && (
           <SectionCard title="Porter's Five Forces">
-            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-slate-800">
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-fg">
               <p>
                 <span className="font-medium">Rivalry:</span> {forces.rivalry}
               </p>
@@ -317,7 +310,7 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
         )}
 
         <SectionCard title="GTM — STP & Positioning" className={hasForces ? "" : "xl:col-span-2"}>
-          <div className="text-sm text-slate-800 space-y-1 mb-3">
+          <div className="text-sm text-fg space-y-1 mb-3">
             <p>
               <span className="font-medium">Segment:</span> {report.gtm.segment}
             </p>
@@ -330,13 +323,13 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           </div>
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+              <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
                 Points of Difference
               </p>
               {report.gtm.points_of_difference.length === 0 ? (
-                <p className="text-sm text-slate-500">None identified from available data.</p>
+                <p className="text-sm text-fg-soft">None identified from available data.</p>
               ) : (
-                <ul className="text-sm text-slate-800 list-disc list-inside space-y-0.5">
+                <ul className="text-sm text-fg list-disc list-inside space-y-0.5">
                   {report.gtm.points_of_difference.map((p, i) => (
                     <li key={i}>{p}</li>
                   ))}
@@ -344,13 +337,13 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+              <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
                 Points of Parity
               </p>
               {report.gtm.points_of_parity.length === 0 ? (
-                <p className="text-sm text-slate-500">None identified from available data.</p>
+                <p className="text-sm text-fg-soft">None identified from available data.</p>
               ) : (
-                <ul className="text-sm text-slate-800 list-disc list-inside space-y-0.5">
+                <ul className="text-sm text-fg list-disc list-inside space-y-0.5">
                   {report.gtm.points_of_parity.map((p, i) => (
                     <li key={i}>{p}</li>
                   ))}
@@ -366,27 +359,27 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           <SectionCard title="Brand Diagnosis (CBBE)">
             <div className="space-y-3 text-sm">
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+                <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
                   Node word — the one thing this brand owns in customers&apos; minds
                 </p>
                 {report.brand.node_word ? (
-                  <p className="text-slate-900">
-                    <span className="font-semibold text-indigo-700">
+                  <p className="text-fg">
+                    <span className="badge-accent">
                       &quot;{report.brand.node_word}&quot;
                     </span>{" "}
                     — {report.brand.node_word_evidence}
                   </p>
                 ) : (
-                  <p className="text-slate-500">
+                  <p className="text-fg-soft">
                     No clear association found. {report.brand.node_word_evidence}
                   </p>
                 )}
               </div>
               <div>
-                <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+                <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
                   Weakest brand layer
                 </p>
-                <p className="text-slate-900">
+                <p className="text-fg">
                   <span className="font-semibold capitalize">
                     {report.brand.weakest_cbbe_layer}
                   </span>{" "}
@@ -400,22 +393,22 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
             {report.brand.campaign ? (
               <div className="space-y-2 text-sm">
                 <p>
-                  <span className="text-xs font-semibold uppercase text-slate-500">Enemy: </span>
-                  <span className="text-slate-900">{report.brand.campaign.enemy}</span>
+                  <span className="text-xs font-semibold uppercase text-fg-soft">Enemy: </span>
+                  <span className="text-fg">{report.brand.campaign.enemy}</span>
                 </p>
                 <p>
-                  <span className="text-xs font-semibold uppercase text-slate-500">Stand: </span>
-                  <span className="text-slate-900">{report.brand.campaign.stand}</span>
+                  <span className="text-xs font-semibold uppercase text-fg-soft">Stand: </span>
+                  <span className="text-fg">{report.brand.campaign.stand}</span>
                 </p>
-                <p className="pt-1 border-t border-slate-100">
-                  <span className="text-xs font-semibold uppercase text-slate-500">Mantra: </span>
-                  <span className="text-slate-900 font-semibold italic">
+                <p className="pt-1 border-t divider">
+                  <span className="text-xs font-semibold uppercase text-fg-soft">Mantra: </span>
+                  <span className="text-fg font-semibold italic">
                     &quot;{report.brand.campaign.mantra}&quot;
                   </span>
                 </p>
               </div>
             ) : (
-              <p className="text-sm text-slate-500">
+              <p className="text-sm text-fg-soft">
                 No customer pain point in the data clearly justifies a campaign angle yet.
               </p>
             )}
@@ -427,14 +420,14 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
         <SectionCard title="Customer Personas (from review evidence)">
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {report.brand.personas.map((p, i) => (
-              <div key={i} className="border border-slate-200 rounded-lg p-3">
-                <p className="font-semibold text-slate-900 mb-1">{p.name}</p>
-                <p className="text-xs text-slate-500 mb-2">{p.context}</p>
-                <p className="text-xs text-slate-700 mb-1">
+              <div key={i} className="card p-3">
+                <p className="font-semibold text-fg mb-1">{p.name}</p>
+                <p className="text-xs text-fg-soft mb-2">{p.context}</p>
+                <p className="text-xs text-fg-muted mb-1">
                   <span className="font-semibold">Goals: </span>
                   {p.goals}
                 </p>
-                <p className="text-xs text-slate-700">
+                <p className="text-xs text-fg-muted">
                   <span className="font-semibold">Pain points: </span>
                   {p.pain_points}
                 </p>
@@ -445,50 +438,69 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       )}
 
       <SectionCard
-        title="Product Roadmap — RICE Prioritization"
-        info="RICE = (Reach × Impact × Confidence) ÷ Effort. Reach: how many customers/reviews this touches (1-10). Impact: how much it moves the needle if fixed (1-3 = low, 4-7 = medium, 8-10 = high). Confidence: how sure the model is, based on how directly the review evidence supports it (as a % expressed 0-1, e.g. 0.8 = 80%). Effort: rough person-weeks to ship (1-10). Higher score = higher priority. All four inputs are derived by the LLM from the actual themes and quote evidence found for this company — not invented independently of the review data."
+        title="Issues & Solutions"
+        info="At most 3-4 issues, ranked by how many reviews cite them and whether customers used real exit language. Each one names the problem directly, cites the evidence behind it, and gives a costed, sequenced fix — not an abstract theme score."
       >
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-xs uppercase text-slate-500 border-b border-slate-200">
-                <th className="pb-2 pr-2">Action</th>
-                <th className="pb-2 px-2 text-right">Reach</th>
-                <th className="pb-2 px-2 text-right">Impact</th>
-                <th className="pb-2 px-2 text-right">Conf.</th>
-                <th className="pb-2 px-2 text-right">Effort</th>
-                <th className="pb-2 pl-2 text-right">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.product_roadmap.map((item, i) => (
-                <tr key={i} className="border-b border-slate-100 last:border-0">
-                  <td className="py-2 pr-2 text-slate-900 font-medium">{item.action}</td>
-                  <td className="py-2 px-2 text-right text-slate-700">{item.reach}</td>
-                  <td className="py-2 px-2 text-right text-slate-700">{item.impact}</td>
-                  <td className="py-2 px-2 text-right text-slate-700">{item.confidence}</td>
-                  <td className="py-2 px-2 text-right text-slate-700">{item.effort}</td>
-                  <td className="py-2 pl-2 text-right font-semibold text-slate-900">
-                    {item.score}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <div className="space-y-4">
+          {report.issues.map((issue, i) => (
+            <div key={i} className="card p-4">
+              <div className="flex items-start gap-3 mb-3">
+                <span
+                  className="flex-shrink-0 h-7 w-7 rounded-md flex items-center justify-center text-sm font-bold"
+                  style={{ backgroundColor: "var(--color-accent)", color: "var(--color-on-primary)" }}
+                >
+                  {i + 1}
+                </span>
+                <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-semibold text-fg">{issue.title}</p>
+                    <span
+                      className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${PRIORITY_COLOR[issue.priority]}`}
+                    >
+                      {issue.priority.toUpperCase()}
+                    </span>
+                    {issue.at_risk && (
+                      <span
+                        className="text-[10px] font-semibold px-1.5 py-0.5 rounded text-white"
+                        style={{ backgroundColor: STATUS.critical }}
+                      >
+                        AT RISK
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-fg-soft mt-0.5">{issue.pct_of_reviews}% of reviews</p>
+                </div>
+              </div>
 
-        <div className="mt-4 space-y-3">
-          {report.product_roadmap.map((item, i) => (
-            <div key={i} className="border border-slate-200 rounded-md p-3">
-              <p className="text-sm font-semibold text-slate-900 mb-1.5">{item.action}</p>
-              <ol className="text-sm text-slate-700 list-decimal list-inside space-y-0.5 mb-2">
-                {item.how_to_implement.map((step, j) => (
+              <p className="text-xs font-semibold uppercase text-red-600 mb-1">What&apos;s broken (evidence)</p>
+              <ul className="text-sm text-fg-muted list-disc list-inside space-y-0.5 mb-3">
+                {issue.evidence.map((e, j) => (
+                  <li key={j}>{e}</li>
+                ))}
+              </ul>
+
+              <p className="text-xs font-semibold uppercase mb-1" style={{ color: "var(--color-success)" }}>
+                The fix
+              </p>
+              <ol className="text-sm text-fg-muted list-decimal list-inside space-y-0.5 mb-3">
+                {issue.fix.map((step, j) => (
                   <li key={j}>{step}</li>
                 ))}
               </ol>
-              <p className="text-xs text-indigo-700">
+
+              <div className="grid sm:grid-cols-2 gap-2 text-xs rounded-md p-3" style={{ backgroundColor: "var(--color-muted)" }}>
+                <p className="text-fg">
+                  <span className="font-semibold">Cost: </span>
+                  {issue.cost}
+                </p>
+                <p className="text-fg">
+                  <span className="font-semibold">Estimated impact: </span>
+                  {issue.impact}
+                </p>
+              </div>
+              <p className="text-xs badge-accent mt-2">
                 <span className="font-semibold">Track: </span>
-                {item.metric_to_track}
+                {issue.metric_to_track}
               </p>
             </div>
           ))}
@@ -498,13 +510,13 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       <SectionCard title="Finance">
         <div className="grid xl:grid-cols-2 gap-x-6 gap-y-3">
           <div>
-            <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+            <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
               {data.companyName}
             </p>
             {!report.finance.own.found ? (
-              <p className="text-sm text-slate-500">No public financial data found.</p>
+              <p className="text-sm text-fg-soft">No public financial data found.</p>
             ) : (
-              <ul className="text-sm text-slate-800 space-y-0.5">
+              <ul className="text-sm text-fg space-y-0.5">
                 {report.finance.own.findings.map((f, i) => (
                   <li key={i}>{f}</li>
                 ))}
@@ -513,52 +525,34 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           </div>
           {report.finance.competitors.map((comp, i) => (
             <div key={i}>
-              <p className="text-xs font-semibold uppercase text-slate-500 mb-1">{comp.name}</p>
+              <p className="text-xs font-semibold uppercase text-fg-soft mb-1">{comp.name}</p>
               {!comp.found ? (
-                <p className="text-sm text-slate-500">No public financial data found.</p>
+                <p className="text-sm text-fg-soft">No public financial data found.</p>
               ) : (
-                <ul className="text-sm text-slate-800 space-y-0.5">
+                <ul className="text-sm text-fg space-y-0.5">
                   {comp.findings.map((f, j) => (
                     <li key={j}>{f}</li>
                   ))}
                 </ul>
               )}
               {comp.comparison && (
-                <p className="text-sm text-indigo-700 mt-1">{comp.comparison}</p>
+                <p className="text-sm badge-accent mt-1">{comp.comparison}</p>
               )}
             </div>
           ))}
         </div>
         {report.finance.unit_economics_notes.length > 0 && (
-          <div className="pt-3 mt-3 border-t border-slate-100">
-            <p className="text-xs font-semibold uppercase text-slate-500 mb-1">
+          <div className="pt-3 mt-3 border-t divider">
+            <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
               Unit Economics Notes
             </p>
-            <ul className="text-sm text-slate-800 space-y-0.5">
+            <ul className="text-sm text-fg space-y-0.5">
               {report.finance.unit_economics_notes.map((n, i) => (
                 <li key={i}>{n}</li>
               ))}
             </ul>
           </div>
         )}
-      </SectionCard>
-
-      <SectionCard title="Roadmap Summary (Impact–Effort: Now / Near / Far)">
-        <div className="grid lg:grid-cols-3 gap-2">
-          {report.roadmap.map((item, i) => (
-            <div key={i} className="border border-slate-200 rounded-md p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span
-                  className={`text-xs font-semibold px-2 py-0.5 rounded-full ${PRIORITY_COLOR[item.priority]}`}
-                >
-                  {item.priority.toUpperCase()}
-                </span>
-                <h4 className="font-medium text-slate-900">{item.action}</h4>
-              </div>
-              <p className="text-sm text-slate-600">{item.rationale}</p>
-            </div>
-          ))}
-        </div>
       </SectionCard>
     </div>
   );

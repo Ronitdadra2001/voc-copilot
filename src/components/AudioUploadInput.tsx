@@ -35,19 +35,33 @@ export default function AudioUploadInput({
 
   return (
     <div>
-      <label className="block text-sm font-medium text-slate-700 mb-1">
+      <label
+        htmlFor="audioUpload"
+        className="block text-sm font-medium mb-1.5"
+        style={{ color: "var(--color-foreground)" }}
+      >
         Upload audio feedback (transcribed automatically)
       </label>
       <input
+        id="audioUpload"
         ref={inputRef}
         type="file"
         accept="audio/*"
         onChange={handleChange}
         disabled={busy}
-        className="w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-300"
+        className="w-full text-sm cursor-pointer file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:px-3.5 file:py-2 file:text-sm file:font-medium"
+        style={{ color: "var(--color-foreground)" }}
       />
-      {busy && <p className="text-sm text-slate-600 mt-1">Transcribing {filename}…</p>}
-      {error && <p className="text-sm text-red-600 mt-1">{error}</p>}
+      {busy && (
+        <p className="text-sm mt-1.5 opacity-80" style={{ color: "var(--color-foreground)" }}>
+          Transcribing {filename}…
+        </p>
+      )}
+      {error && (
+        <p className="text-sm mt-1.5" style={{ color: "var(--color-destructive)" }}>
+          {error}
+        </p>
+      )}
     </div>
   );
 }

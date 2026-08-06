@@ -1,12 +1,17 @@
 import { firecrawl } from "./clients";
 import { chatCompletion } from "./llm";
 import { scrapeWithPythonService } from "./pythonScraper";
-import { scrapeAppStoreReviews, scrapeGooglePlayReviews } from "./appReviews";
+import { scrapeAppStoreReviews, scrapeGooglePlayReviews, resolveStoreAppName } from "./appReviews";
 
 export interface GatherResult {
   markdown: string;
   sourcesUsed: string[];
   reviewCount: number;
+  // Set only when companyOrLink was a direct Play/App Store URL and the real
+  // app name could be resolved — a bare store URL/id is never itself a
+  // usable company name for search or display (was silently showing
+  // "play.google.com" as the company before this).
+  resolvedCompanyName?: string;
 }
 
 const REVIEW_PLATFORM_HOSTS = [
@@ -269,22 +274,25 @@ export async function autoGatherReviews(
   const reviewChunks: string[] = [];
 
   if (url && (isGooglePlayUrl(url) || isAppStoreUrl(url))) {
+    const storeKind = isGooglePlayUrl(url) ? "google-play" : "app-store";
     try {
-      const content = isGooglePlayUrl(url)
-        ? await scrapeGooglePlayReviews(companyOrLink)
-        : await scrapeAppStoreReviews(companyOrLink);
-      if (content.trim()) {
-        sourcesUsed.push(isGooglePlayUrl(url) ? "apify-google-play" : "apify-app-store");
-        reviewChunks.push(content);
+      const [result, resolvedCompanyName] = await Promise.all([
+        isGooglePlayUrl(url) ? scrapeGooglePlayReviews(companyOrLink) : scrapeAppStoreReviews(companyOrLink),
+        resolveStoreAppName(companyOrLink, storeKind),
+      ]);
+      if (result.content.trim()) {
+        sourcesUsed.push(`${result.source}-${storeKind}`);
+        reviewChunks.push(result.content);
       }
+      return {
+        markdown: reviewChunks.join("\n\n"),
+        sourcesUsed,
+        reviewCount: reviewChunks.length,
+        resolvedCompanyName: resolvedCompanyName ?? undefined,
+      };
     } catch (err) {
-      throw new Error(err instanceof Error ? err.message : "Apify scrape failed");
+      throw new Error(err instanceof Error ? err.message : "App store scrape failed");
     }
-    return {
-      markdown: reviewChunks.join("\n\n"),
-      sourcesUsed,
-      reviewCount: reviewChunks.length,
-    };
   }
 
   if (url && isKnownReviewPlatform(url)) {
@@ -352,13 +360,13 @@ export async function autoGatherReviews(
   if (webResults.some((r) => r.engine === "firecrawl")) sourcesUsed.push("firecrawl-search:reviews");
   if (webResults.some((r) => r.engine === "duckduckgo")) sourcesUsed.push("duckduckgo-search:reviews");
 
-  if (playStoreContent?.trim()) {
-    reviewChunks.push(`--- from Google Play reviews ---\n${playStoreContent}`);
-    sourcesUsed.push("apify-google-play");
+  if (playStoreContent?.content.trim()) {
+    reviewChunks.push(`--- from Google Play reviews ---\n${playStoreContent.content}`);
+    sourcesUsed.push(`${playStoreContent.source}-google-play`);
   }
-  if (appStoreContent?.trim()) {
-    reviewChunks.push(`--- from App Store reviews ---\n${appStoreContent}`);
-    sourcesUsed.push("apify-app-store");
+  if (appStoreContent?.content.trim()) {
+    reviewChunks.push(`--- from App Store reviews ---\n${appStoreContent.content}`);
+    sourcesUsed.push(`${appStoreContent.source}-app-store`);
   }
 
   return {

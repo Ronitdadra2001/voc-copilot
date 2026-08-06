@@ -17,13 +17,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "companyOrLink is required" }, { status: 400 });
     }
     const desc = description ?? "";
-    const cleanName = deriveCleanCompanyName(companyOrLink);
 
-    // Run all independent searches in parallel for speed. Competitor/financial
-    // search need the clean name ("Notion"), never the raw link — a URL
-    // string never appears verbatim in the articles being searched.
-    const [reviews, competitors, ownFinancial] = await Promise.all([
-      autoGatherReviews(companyOrLink, desc),
+    // Reviews are gathered first since, for a direct Play/App Store URL, it
+    // resolves the REAL app name (e.g. "Zomato") — a bare store URL/id is
+    // never usable as the search subject for competitor/financial lookups,
+    // and using it directly was confirmed to search for/attribute data to
+    // "play.google.com" instead of the actual company.
+    const reviews = await autoGatherReviews(companyOrLink, desc);
+    const cleanName = reviews.resolvedCompanyName ?? deriveCleanCompanyName(companyOrLink);
+
+    const [competitors, ownFinancial] = await Promise.all([
       gatherCompetitorProfiles(cleanName, desc, 2),
       gatherFinancialContext(cleanName, desc),
     ]);
@@ -44,6 +47,7 @@ export async function POST(req: NextRequest) {
       reviewCount: reviews.reviewCount,
       competitors,
       ownFinancialContext: ownFinancial.found ? ownFinancial.markdown : "",
+      resolvedCompanyName: reviews.resolvedCompanyName ?? null,
     });
   } catch (err) {
     console.error(err);

@@ -88,7 +88,8 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyName: deriveCompanyName(companyOrLink),
+          companyName:
+            (gatherRes.ok && gatherData.resolvedCompanyName) || deriveCompanyName(companyOrLink),
           rawReviews: combined,
           competitors: gatherRes.ok ? gatherData.competitors : [],
           ownFinancialContext: gatherRes.ok ? gatherData.ownFinancialContext : "",
@@ -109,76 +110,124 @@ export default function Home() {
   const hasResults = loading || analysisId;
 
   return (
-    <main className="min-h-screen bg-slate-100 py-10 px-4">
+    <main className="min-h-screen py-10 px-4" style={{ backgroundColor: "var(--color-background)" }}>
       <div className={hasResults ? "max-w-[1600px] mx-auto" : "max-w-3xl mx-auto"}>
         <header className="mb-8">
-          <h1 className="text-2xl font-bold text-slate-900">Voice-of-Customer Copilot</h1>
-          <p className="text-slate-700 text-sm mt-1">
-            Give a company/competitor name or link — the copilot searches the web for real
-            reviews, analyzes them, and produces a live dashboard plus a downloadable PDF.
+          <h1 className="text-2xl font-bold" style={{ color: "var(--color-foreground)" }}>
+            How MBA Professors Would Respond
+          </h1>
+          <p className="text-sm mt-1 opacity-80" style={{ color: "var(--color-foreground)" }}>
+            Give a company/competitor name or link — the copilot scrapes real reviews from across
+            the web, app stores, and Play Store, then answers the way an MBA professor would: a
+            structured diagnosis grounded in real customer evidence, not generic advice.
           </p>
         </header>
 
         <div className={hasResults ? "max-w-3xl mb-8" : ""}>
           <form
             onSubmit={handleAnalyze}
-            className="bg-white border border-slate-200 rounded-lg shadow-sm p-5 space-y-4"
+            className="rounded-xl shadow-sm p-6 space-y-5 border"
+            style={{
+              backgroundColor: "var(--color-on-primary)",
+              borderColor: "var(--color-border)",
+            }}
           >
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1">
-                Company / competitor product name or link <span className="text-red-600">*</span>
+              <label
+                htmlFor="companyOrLink"
+                className="block text-sm font-medium mb-1.5"
+                style={{ color: "var(--color-foreground)" }}
+              >
+                Company / competitor product name or link{" "}
+                <span style={{ color: "var(--color-destructive)" }}>*</span>
               </label>
               <input
+                id="companyOrLink"
                 required
                 value={companyOrLink}
                 onChange={(e) => setCompanyOrLink(e.target.value)}
                 placeholder="e.g. RivalMeals, or https://www.g2.com/products/example/reviews"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="w-full rounded-md border px-3.5 py-2.5 text-base focus-visible:outline-none"
+                style={{ borderColor: "var(--color-border)", color: "var(--color-foreground)" }}
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1">
-                Product details / specification <span className="text-red-600">*</span>
+              <label
+                htmlFor="description"
+                className="block text-sm font-medium mb-1.5"
+                style={{ color: "var(--color-foreground)" }}
+              >
+                Product details / specification{" "}
+                <span style={{ color: "var(--color-destructive)" }}>*</span>
               </label>
               <input
+                id="description"
                 required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="e.g. food delivery app in India — or ask something: how are the reviews? what do customers need?"
-                className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900"
+                className="w-full rounded-md border px-3.5 py-2.5 text-base focus-visible:outline-none"
+                style={{ borderColor: "var(--color-border)", color: "var(--color-foreground)" }}
               />
-              <p className="text-xs text-slate-500 mt-1">
+              <p className="text-xs mt-1.5 opacity-70" style={{ color: "var(--color-foreground)" }}>
                 Describe the product, and/or ask a direct question about the company or its
                 customers — we&apos;ll answer it up top in the dashboard.
               </p>
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-slate-900 mb-1">
+              <label
+                htmlFor="fileUpload"
+                className="block text-sm font-medium mb-1.5"
+                style={{ color: "var(--color-foreground)" }}
+              >
                 Upload a file of past reviews/grievances (any format)
               </label>
               <input
+                id="fileUpload"
                 ref={fileInputRef}
                 type="file"
                 onChange={handleFileUpload}
                 disabled={uploading}
-                className="w-full text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-200 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-800 hover:file:bg-slate-300"
+                className="w-full text-sm cursor-pointer file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:px-3.5 file:py-2 file:text-sm file:font-medium"
+                style={{ color: "var(--color-foreground)" }}
               />
-              {uploading && <p className="text-sm text-slate-600 mt-1">Parsing file…</p>}
-              {uploadError && <p className="text-sm text-red-600 mt-1">{uploadError}</p>}
-              {fileStatus && <p className="text-sm text-emerald-700 mt-1">✓ {fileStatus}</p>}
+              {uploading && (
+                <p className="text-sm mt-1.5 opacity-80" style={{ color: "var(--color-foreground)" }}>
+                  Parsing file…
+                </p>
+              )}
+              {uploadError && (
+                <p className="text-sm mt-1.5" style={{ color: "var(--color-destructive)" }}>
+                  {uploadError}
+                </p>
+              )}
+              {fileStatus && (
+                <p className="text-sm mt-1.5" style={{ color: "var(--color-success)" }}>
+                  ✓ {fileStatus}
+                </p>
+              )}
             </div>
 
             <AudioUploadInput onTranscript={handleAudioTranscript} />
-            {audioStatus && <p className="text-sm text-emerald-700 -mt-2">✓ {audioStatus}</p>}
+            {audioStatus && (
+              <p className="text-sm -mt-2" style={{ color: "var(--color-success)" }}>
+                ✓ {audioStatus}
+              </p>
+            )}
 
-            {error && <p className="text-sm text-red-600">{error}</p>}
+            {error && (
+              <p className="text-sm" style={{ color: "var(--color-destructive)" }}>
+                {error}
+              </p>
+            )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-md bg-slate-900 text-white py-2.5 text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
+              className="w-full rounded-md py-3 text-sm font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+              style={{ backgroundColor: "var(--color-accent)", color: "var(--color-on-primary)" }}
             >
               {loading ? statusMessage ?? "Working…" : "Analyze reviews"}
             </button>
