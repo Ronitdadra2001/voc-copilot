@@ -1,26 +1,52 @@
 @import "tailwindcss";
 
 :root {
+  /* Data-Dense Dashboard palette, from the /uiux skill's design-system
+     recommendation for this app type — accent adjusted for WCAG 3:1. */
   --background: #ffffff;
-  --foreground: #171717;
+  --foreground: #1e3a8a;
+  --color-primary: #1e40af;
+  --color-accent: #d97706;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* This app is light-themed throughout (hardcoded white/slate-100 surfaces),
+   so we don't auto-flip to a dark foreground here — doing so left body text
+   near-white against those light surfaces, making typed text unreadable. */
 
 body {
   background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: #0f172a;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+input,
+textarea,
+select {
+  color: #0f172a;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #94a3b8;
+}
+
+/* Recommended pre-delivery checklist item: visible, smooth hover transitions
+   on every clickable element (150-300ms), not just ad-hoc per-component. */
+button,
+a {
+  transition: background-color 150ms ease, color 150ms ease, opacity 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  button,
+  a {
+    transition: none;
+  }
 }

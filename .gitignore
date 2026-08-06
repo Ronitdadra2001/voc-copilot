@@ -36,6 +36,14 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local db
+/data/*.db
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python scraper service
+scraper-service/venv/
+scraper-service/__pycache__/
+scraper-service/.env
