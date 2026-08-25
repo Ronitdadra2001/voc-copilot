@@ -1,4 +1,4 @@
-import { groq, openai, openrouter, gemini } from "./clients";
+import { groq, openai, openrouter, GEMINI_API_KEY } from "./clients";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -98,15 +98,50 @@ async function callGroq(opts: ChatOptions) {
 // provider specifically because Groq (daily cap), OpenAI (zero quota), and
 // OpenRouter (near-zero credit balance) were all exhausted on the same day
 // during heavy testing, leaving no working fallback at all.
+// Gemini's native REST API — confirmed against Google's own generated cURL
+// quickstart for this key: X-goog-api-key header, models/{id}:generateContent
+// path, and a contents/parts request shape entirely different from the
+// OpenAI SDK's — not an OpenAI-compatible endpoint. system role becomes
+// systemInstruction; assistant role maps to Gemini's "model" role.
 async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
-  const completion = await gemini.chat.completions.create({
-    model: "gemini-2.0-flash",
-    messages,
-    temperature,
-    max_tokens: maxTokens,
-    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
-  });
-  const content = completion.choices[0]?.message?.content;
+  if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
+
+  const systemMessages = messages.filter((m) => m.role === "system");
+  const turns = messages.filter((m) => m.role !== "system");
+
+  const body: Record<string, unknown> = {
+    contents: turns.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+    generationConfig: {
+      temperature,
+      maxOutputTokens: maxTokens,
+      ...(jsonMode ? { responseMimeType: "application/json" } : {}),
+    },
+  };
+  if (systemMessages.length > 0) {
+    body.systemInstruction = {
+      parts: [{ text: systemMessages.map((m) => m.content).join("\n\n") }],
+    };
+  }
+
+  const res = await fetch(
+    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY },
+      body: JSON.stringify(body),
+    }
+  );
+  if (!res.ok) {
+    const errText = await res.text().catch(() => "");
+    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 500)}`);
+  }
+  const data = (await res.json()) as {
+    candidates?: { content?: { parts?: { text?: string }[] } }[];
+  };
+  const content = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("");
   if (!content) throw new Error("Empty response from Gemini");
   return content;
 }
