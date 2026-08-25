@@ -107,10 +107,19 @@ async function callGroq(opts: ChatOptions) {
 // free-tier flash aliases are the most oversubscribed pool on Google's
 // side. flash-lite is the lighter/faster tier and typically has more
 // free-tier headroom; tried second if flash-latest is overloaded, rather
-// than committing to only one model name.
-const GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"];
+// than committing to only one model name. flash-lite does NOT support
+// thinkingConfig at all (confirmed live: sending it returns a 400 "invalid
+// argument") — it isn't a thinking model to begin with, unlike flash.
+const GEMINI_MODELS: { name: string; supportsThinking: boolean }[] = [
+  { name: "gemini-flash-latest", supportsThinking: true },
+  { name: "gemini-flash-lite-latest", supportsThinking: false },
+];
 
-async function callGeminiModel(model: string, opts: ChatOptions) {
+async function callGeminiModel(
+  model: string,
+  supportsThinking: boolean,
+  opts: ChatOptions
+) {
   const { messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS } = opts;
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
 
@@ -129,8 +138,9 @@ async function callGeminiModel(model: string, opts: ChatOptions) {
       // failure mode as Groq's gpt-oss — confirmed live: hidden thinking
       // tokens consumed the entire maxOutputTokens budget, returning a
       // response with no actual answer text at all. Disabling it entirely
-      // leaves the full budget for the real JSON answer.
-      thinkingConfig: { thinkingBudget: 0 },
+      // leaves the full budget for the real JSON answer. Only sent for
+      // models that actually support it (see GEMINI_MODELS above).
+      ...(supportsThinking ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       ...(jsonMode ? { responseMimeType: "application/json" } : {}),
     },
   };
@@ -164,9 +174,9 @@ async function callGeminiModel(model: string, opts: ChatOptions) {
 
 async function callGemini(opts: ChatOptions) {
   const errors: string[] = [];
-  for (const model of GEMINI_MODELS) {
+  for (const { name, supportsThinking } of GEMINI_MODELS) {
     try {
-      return await callGeminiModel(model, opts);
+      return await callGeminiModel(name, supportsThinking, opts);
     } catch (err) {
       errors.push(err instanceof Error ? err.message : String(err));
     }
