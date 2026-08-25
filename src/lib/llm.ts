@@ -1,4 +1,4 @@
-import { groq, openai, openrouter } from "./clients";
+import { groq, openai, openrouter, gemini } from "./clients";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -94,6 +94,23 @@ async function callGroq(opts: ChatOptions) {
   }
 }
 
+// Gemini's OpenAI-compatible endpoint, free tier — added as a fourth
+// provider specifically because Groq (daily cap), OpenAI (zero quota), and
+// OpenRouter (near-zero credit balance) were all exhausted on the same day
+// during heavy testing, leaving no working fallback at all.
+async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
+  const completion = await gemini.chat.completions.create({
+    model: "gemini-2.0-flash",
+    messages,
+    temperature,
+    max_tokens: maxTokens,
+    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+  });
+  const content = completion.choices[0]?.message?.content;
+  if (!content) throw new Error("Empty response from Gemini");
+  return content;
+}
+
 async function callOpenAI({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -124,7 +141,12 @@ async function callOpenRouter({ messages, jsonMode, temperature = 0.3, maxTokens
 // one provider (quota, rate limit, auth, whatever) moves to the next —
 // simplest and most robust for uptime, since a provider-specific error
 // doesn't tell us anything about whether the next provider will also fail.
+// Gemini tried first — Groq (daily cap), OpenAI (zero quota), and
+// OpenRouter (near-zero credit) were all exhausted the same day, so
+// putting Gemini last would mean paying its latency cost only after three
+// guaranteed failures on every single call.
 const PROVIDERS: Provider[] = [
+  { name: "Gemini", call: callGemini },
   { name: "Groq", call: callGroq },
   { name: "OpenAI", call: callOpenAI },
   { name: "OpenRouter", call: callOpenRouter },
