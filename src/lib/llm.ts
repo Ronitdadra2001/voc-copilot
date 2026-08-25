@@ -117,6 +117,12 @@ async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = D
     generationConfig: {
       temperature,
       maxOutputTokens: maxTokens,
+      // Gemini's newer models "think" before answering by default, same
+      // failure mode as Groq's gpt-oss — confirmed live: hidden thinking
+      // tokens consumed the entire maxOutputTokens budget, returning a
+      // response with no actual answer text at all. Disabling it entirely
+      // leaves the full budget for the real JSON answer.
+      thinkingConfig: { thinkingBudget: 0 },
       ...(jsonMode ? { responseMimeType: "application/json" } : {}),
     },
   };
@@ -139,10 +145,12 @@ async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = D
     throw new Error(`Gemini ${res.status}: ${errText.slice(0, 500)}`);
   }
   const data = (await res.json()) as {
-    candidates?: { content?: { parts?: { text?: string }[] } }[];
+    candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
   };
   const content = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("");
-  if (!content) throw new Error("Empty response from Gemini");
+  if (!content) {
+    throw new Error(`Empty response from Gemini: ${JSON.stringify(data).slice(0, 500)}`);
+  }
   return content;
 }
 
