@@ -426,7 +426,7 @@ const ProductFinanceSchema = z.object({
     top_issue_pct: z.number().nullable(),
   }),
   highs: z.array(z.object({ label: z.string(), detail: z.string() })),
-  issues: z.array(IssueSchema).max(4),
+  issues: z.array(IssueSchema).max(3),
   porters_five_forces: z.object({
     rivalry: z.string(),
     threat_of_new_entrants: z.string(),
@@ -484,10 +484,10 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
 
 1. "metrics" — total_reviews = total_reviews_analyzed, issue_count = number of issues returned, at_risk_issue_count = count of at_risk issues, top_issue_title/pct = highest pct_of_reviews issue (null if none).
 2. "highs" — concrete positives ONLY if the data supports them; empty array if genuinely none.
-3. "issues" — AT MOST 4 items, the top 3-4 by pct_of_reviews/at-risk severity. Rank at_risk issues first, then by pct_of_reviews descending. For each issue:
+3. "issues" — AT MOST 3 items, the top 2-3 by pct_of_reviews/at-risk severity. Rank at_risk issues first, then by pct_of_reviews descending. For each issue:
    - "title": name the issue plainly and directly (e.g. "Missing charging cable in the box") — NEVER "Theme:" or an abstract category.
-   - "evidence": 1-3 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
-   - "fix": 2-4 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
+   - "evidence": 1-2 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
+   - "fix": 2-3 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
    - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the 4 named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." Never a bare framework name with no verdict attached.
    - "cost": a rupee/dollar estimate if reasonably inferable, "engineering time only" for investigation work, or "$0 — config/policy change" if free. Never vague.
    - "impact": a modeled, assumption-stated estimate (Guesstimate method: state each assumption explicitly, then compute — never a bare invented number).
