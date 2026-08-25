@@ -60,13 +60,23 @@ function parseGroqRetryAfterMs(message: string): number | null {
 // gpt-oss-120b is the closest quality tier to the old 70B llama model.
 async function callGroqOnce(opts: ChatOptions) {
   const { messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS } = opts;
-  const completion = await groq.chat.completions.create({
+  const params = {
     model: "openai/gpt-oss-120b",
     messages,
     temperature,
     max_tokens: maxTokens,
+    // gpt-oss models spend hidden reasoning tokens before the final answer
+    // — confirmed live: a tight max_tokens let reasoning alone consume the
+    // whole budget, returning a completely empty content field ("Failed to
+    // validate JSON... failed_generation: ''"). Forcing low reasoning
+    // effort leaves the token budget for the actual JSON answer instead.
+    // Not in the SDK's typed params (Groq-specific extension), hence the
+    // any-typed spread below rather than an inline object cast.
+    reasoning_effort: "low",
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
-  });
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  } as any;
+  const completion = await groq.chat.completions.create(params);
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("Empty response from Groq");
   return content;
