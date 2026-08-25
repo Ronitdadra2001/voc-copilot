@@ -103,7 +103,15 @@ async function callGroq(opts: ChatOptions) {
 // path, and a contents/parts request shape entirely different from the
 // OpenAI SDK's — not an OpenAI-compatible endpoint. system role becomes
 // systemInstruction; assistant role maps to Gemini's "model" role.
-async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
+// gemini-flash-latest returned live 503 "high demand" twice in a row —
+// free-tier flash aliases are the most oversubscribed pool on Google's
+// side. flash-lite is the lighter/faster tier and typically has more
+// free-tier headroom; tried second if flash-latest is overloaded, rather
+// than committing to only one model name.
+const GEMINI_MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"];
+
+async function callGeminiModel(model: string, opts: ChatOptions) {
+  const { messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS } = opts;
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
 
   const systemMessages = messages.filter((m) => m.role === "system");
@@ -133,7 +141,7 @@ async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = D
   }
 
   const res = await fetch(
-    "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent",
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY },
@@ -142,16 +150,28 @@ async function callGemini({ messages, jsonMode, temperature = 0.3, maxTokens = D
   );
   if (!res.ok) {
     const errText = await res.text().catch(() => "");
-    throw new Error(`Gemini ${res.status}: ${errText.slice(0, 500)}`);
+    throw new Error(`Gemini(${model}) ${res.status}: ${errText.slice(0, 500)}`);
   }
   const data = (await res.json()) as {
     candidates?: { content?: { parts?: { text?: string }[] }; finishReason?: string }[];
   };
   const content = data.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("");
   if (!content) {
-    throw new Error(`Empty response from Gemini: ${JSON.stringify(data).slice(0, 500)}`);
+    throw new Error(`Empty response from Gemini(${model}): ${JSON.stringify(data).slice(0, 500)}`);
   }
   return content;
+}
+
+async function callGemini(opts: ChatOptions) {
+  const errors: string[] = [];
+  for (const model of GEMINI_MODELS) {
+    try {
+      return await callGeminiModel(model, opts);
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : String(err));
+    }
+  }
+  throw new Error(errors.join(" | "));
 }
 
 async function callOpenAI({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
