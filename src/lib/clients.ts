@@ -18,7 +18,7 @@ export const openrouter = new OpenAI({
 // near-zero credit balance were all hit the same day).
 export const gemini = new OpenAI({
   apiKey: process.env.GEMINI_API_KEY,
-  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
+  baseURL: "https://generativelanguage.googleapis.com/v1beta/openai",
 });
 export const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 export const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
