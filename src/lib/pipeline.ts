@@ -137,7 +137,41 @@ ${knowledgeBase}
 
 ${SCHEMA_INSTRUCTIONS}`;
 
-  const user = `Company: ${companyName}\nDirection: ${direction}\nTotal reviews provided: ${reviews.length}\n\nReviews:\n${reviews
+  // A live scrape can return far more reviews than a single LLM call can
+  // afford — Groq's account-wide 8,000-tokens/minute cap (confirmed via
+  // multiple live 413s) makes review-text size a hard constraint now, not
+  // just a token-budget nicety. A FIXED character cap here kept getting
+  // surprised by variance in real-world knowledge-base/instruction-text
+  // size and scrape volume (confirmed in practice, twice) — measure the
+  // actual system prompt that will be sent and size the review sample
+  // against the budget that's ACTUALLY left, so this stays correct
+  // regardless of future edits to the knowledge base or instructions.
+  // ~4 chars/token is a standard, safely-conservative estimate for English
+  // prose (real BPE tokenizers usually do a bit better than this, so this
+  // slightly over-estimates cost, which is the safe direction to err in).
+  const estimateTokens = (text: string) => Math.ceil(text.length / 4);
+  const REQUEST_TOKEN_BUDGET = 7500; // 500-token safety margin below the 8,000 cap
+  const OUTPUT_TOKEN_RESERVE = 1200; // matches maxTokens passed to chatCompletion below
+  const fixedPromptTokens = estimateTokens(system);
+  const reviewCharBudget = Math.max(
+    0,
+    (REQUEST_TOKEN_BUDGET - OUTPUT_TOKEN_RESERVE - fixedPromptTokens) * 4
+  );
+
+  const MAX_REVIEWS_PER_ANALYSIS = 40;
+  const analyzedReviews: string[] = [];
+  let charBudget = 0;
+  for (const r of reviews) {
+    if (analyzedReviews.length >= MAX_REVIEWS_PER_ANALYSIS || charBudget + r.length > reviewCharBudget) break;
+    analyzedReviews.push(r);
+    charBudget += r.length;
+  }
+  const sampledNote =
+    reviews.length > analyzedReviews.length
+      ? ` (sampled from ${reviews.length} found — analyzing the first ${analyzedReviews.length} to stay within provider limits)`
+      : "";
+
+  const user = `Company: ${companyName}\nDirection: ${direction}\nTotal reviews provided: ${analyzedReviews.length}${sampledNote}\n\nReviews:\n${analyzedReviews
     .map((r, i) => `[${i + 1}] ${r}`)
     .join("\n")}`;
 
@@ -148,6 +182,7 @@ ${SCHEMA_INSTRUCTIONS}`;
     ],
     jsonMode: true,
     temperature: 0.3,
+    maxTokens: 1200,
   });
 
   const parsed = extractJson(content);
@@ -505,6 +540,17 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     messages: [{ role: "system", content: system }],
     jsonMode: true,
     temperature: 0.2,
+    // This pass's JSON schema is the largest of the three (up to 4 issues,
+    // each with evidence/fix/frameworks_applied arrays, plus Porter's Five
+    // Forces and the full finance section) — the default budget truncated
+    // it mid-response before reaching porters_five_forces/finance,
+    // confirmed in practice via a schema-validation failure on exactly
+    // those two fields. This pass's own knowledge base (product.md only)
+    // is small, so it has the input-side headroom within Groq's 8k TPM cap
+    // to afford a larger output reserve — tightened down from an initial
+    // 3800 after that still exceeded the cap once real competitor context
+    // was present (confirmed live: 8068 requested against an 8000 limit).
+    maxTokens: 2800,
   });
 
   const parsed = extractJson(content);
