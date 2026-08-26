@@ -495,6 +495,27 @@ export async function gatherFinancialContext(
   qualifier = ""
 ): Promise<{ markdown: string; found: boolean }> {
   const q = qualifier.trim() ? ` ${qualifier.trim()}` : "";
+
+  // screener.in and moneycontrol.com carry real, structured financial
+  // statements (revenue, margins, ratios) for every NSE/BSE-listed Indian
+  // company — a much higher-quality source than a generic web search for
+  // any Indian company that's actually public (Zomato, Swiggy, and most
+  // Indian D2C/consumer brands analyzed here are or will be). Tried FIRST,
+  // narrowly, since a private/international company won't have a page
+  // there at all — the general query below is the fallback for that case,
+  // not run unconditionally alongside it.
+  const indianFinanceResults = await searchWeb(
+    `"${companyName}"${q} financial results annual report (site:screener.in OR site:moneycontrol.com)`,
+    2,
+    companyName
+  );
+  if (indianFinanceResults.length > 0) {
+    const markdown = indianFinanceResults
+      .map((r) => `--- from ${r.url} (${r.title ?? "untitled"}) ---\n${r.markdown}`)
+      .join("\n\n");
+    return { markdown, found: true };
+  }
+
   const results = await searchWeb(
     `"${companyName}"${q} company revenue funding financial results annual report`,
     2,

@@ -164,13 +164,6 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold text-fg">{data.companyName} — Dashboard</h2>
-        <a
-          href={`/api/report/${analysisId}/pdf`}
-          className="rounded-md px-4 py-2 text-sm font-semibold cursor-pointer"
-          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-on-primary)" }}
-        >
-          Download Full PDF
-        </a>
       </div>
 
       {isThinData && (

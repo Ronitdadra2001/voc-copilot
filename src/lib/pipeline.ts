@@ -5,6 +5,7 @@ import {
   getConsumerBehaviorJourneyKnowledge,
   getMarketingBrandingKnowledge,
   getProductKnowledge,
+  getFinanceKnowledge,
 } from "./knowledge-base";
 import type { AnalysisResult, Direction, DashboardReport } from "./types";
 
@@ -504,6 +505,7 @@ async function runProductFinancePass(
   behavior: BehaviorJourneyResult
 ): Promise<ProductFinanceResult> {
   const productKnowledge = getProductKnowledge();
+  const financeKnowledge = getFinanceKnowledge();
 
   const competitorsBlock = competitors.length
     ? competitors
@@ -515,7 +517,7 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
         .join("\n\n")
     : "(no named competitors found)";
 
-  const system = `You are reasoning through ONE opinionated lens: product management — for "${companyName}" (direction: ${direction}). You also report factual financial DATA where it exists (revenue-at-risk sizing, competitor financial findings) — but that is arithmetic on real numbers, not an opinionated finance framework being applied; do not reach for finance-consulting concepts (margin waterfalls, unit economics theory, cost allocation) anywhere in this pass. This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
+  const system = `You are reasoning through TWO lenses that stay strictly separate: product management for the issues/fixes, and finance ONLY for the dedicated "finance" section below — never mix the two. Issue diagnosis and fixes ("frameworks_applied") must ONLY use the PM frameworks (RICE/CIRCLES/Kano/AARRR); the finance frameworks (margin waterfall, LTV:CAC, break-even/operating leverage, relevant-cost/ABC logic) are ONLY for reasoning about revenue_at_risk/unit_economics_notes, and ONLY when real financial figures are actually present in the data below — never invented. This must read like a real analyst's dashboard: every number/finding traceable to the data below, nothing invented.
 
 Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an MBA professor explains a case back to a student. Plain, humanized language first (what actually happened to the customer, in one clear sentence), THEN name the framework used to get there.
 
@@ -531,12 +533,15 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
    - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
    - "priority": "now" (0-30 days) for must-fix-first — baseline/core-function failures or at_risk=true — "near" (31-60 days) for real but less urgent, "far" (61-90 days) for lower-severity items.
 4. "porters_five_forces" — qualitative, one sentence each. NAMED COMPETITORS below is real data — use it, do not default to "insufficient data" when non-empty. 0 named competitors → "competitive intensity can't be assessed from available data." 1+ → name them and describe rivalry from what their context actually shows.
-5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: only where real figures support it — plainly stated numbers, not a costing framework.
+5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: apply the FINANCE KNOWLEDGE below (margin waterfall, LTV:CAC ratio, break-even/operating leverage, relevant-cost/ABC hidden-loser check) ONLY where real figures in the data actually support that specific framework — name the framework applied, e.g. "Gross margin of X% relative to a Y% COGS suggests a sourcing/pricing problem (margin waterfall), not something downstream fixes solve." Never apply a framework the data can't actually support just to fill the field.
 6. "finance.revenue_at_risk" (Guesstimate method: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
-7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below).
+7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below). MUST name the actual issues themselves (e.g. "customers report the app crashing at checkout and delivery partners marking orders delivered when they weren't") — NEVER just a count ("2 issues were found" on its own, with no description of what they are, is not acceptable — a reader should know what's actually wrong after reading only this sentence).
 
-=== PRODUCT MANAGEMENT KNOWLEDGE (apply AT LEAST 2 named frameworks per issue) ===
+=== PRODUCT MANAGEMENT KNOWLEDGE (apply AT LEAST 2 named frameworks per issue — issues/fixes ONLY, never the finance section) ===
 ${productKnowledge}
+
+=== FINANCE KNOWLEDGE (apply ONLY inside the "finance" section, ONLY where real figures below actually support a given framework) ===
+${financeKnowledge}
 
 === ANALYSIS RESULT (condensed) ===
 ${JSON.stringify(
@@ -587,7 +592,7 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     // to afford a larger output reserve — tightened down from an initial
     // 3800 after that still exceeded the cap once real competitor context
     // was present (confirmed live: 8068 requested against an 8000 limit).
-    maxTokens: 2800,
+    maxTokens: 2400,
   });
 
   const parsed = extractJson(content);

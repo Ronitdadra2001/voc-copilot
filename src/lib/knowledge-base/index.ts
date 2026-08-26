@@ -65,3 +65,14 @@ export function getMarketingBrandingKnowledge(): string {
 export function getProductKnowledge(): string {
   return withMandate("product.md");
 }
+
+/** Finance lens — margin waterfall, LTV:CAC, break-even/operating leverage,
+ * relevant-cost/ABC logic. Deliberately scoped to the finance SECTION only
+ * (revenue-at-risk modeling, unit-economics notes) — every framework here
+ * is explicitly conditioned on real figures being present in the source
+ * text, never applied as invented numbers. This is NOT used as a lens for
+ * per-issue product recommendations (that stays product.md-only per
+ * product direction) — only for the report's dedicated finance section. */
+export function getFinanceKnowledge(): string {
+  return load("finance.md");
+}
