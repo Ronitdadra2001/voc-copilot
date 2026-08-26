@@ -502,13 +502,15 @@ export async function gatherFinancialContext(
   // any Indian company that's actually public (Zomato, Swiggy, and most
   // Indian D2C/consumer brands analyzed here are or will be). Tried FIRST,
   // narrowly, since a private/international company won't have a page
-  // there at all — the general query below is the fallback for that case,
-  // not run unconditionally alongside it.
-  const indianFinanceResults = await searchWeb(
-    `"${companyName}"${q} financial results annual report (site:screener.in OR site:moneycontrol.com)`,
-    2,
-    companyName
-  );
+  // there at all — the general query below is the fallback for that case.
+  // Two SEPARATE single-site searches, not one OR-combined query — already
+  // confirmed elsewhere in this file that Firecrawl's search doesn't
+  // reliably honor site: OR-boolean syntax.
+  const [screenerResults, moneycontrolResults] = await Promise.all([
+    searchWeb(`"${companyName}"${q} financial results annual report site:screener.in`, 1, companyName),
+    searchWeb(`"${companyName}"${q} financial results annual report site:moneycontrol.com`, 1, companyName),
+  ]);
+  const indianFinanceResults = [...screenerResults, ...moneycontrolResults];
   if (indianFinanceResults.length > 0) {
     const markdown = indianFinanceResults
       .map((r) => `--- from ${r.url} (${r.title ?? "untitled"}) ---\n${r.markdown}`)
