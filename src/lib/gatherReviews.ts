@@ -526,17 +526,25 @@ export async function gatherFinancialContext(
   // statements (revenue, margins, ratios) for every NSE/BSE-listed Indian
   // company — a much higher-quality source than a generic web search for
   // any Indian company that's actually public (Zomato, Swiggy, and most
-  // Indian D2C/consumer brands analyzed here are or will be). Tried FIRST,
-  // narrowly, since a private/international company won't have a page
-  // there at all — the general query below is the fallback for that case.
-  // Two SEPARATE single-site searches, not one OR-combined query — already
-  // confirmed elsewhere in this file that Firecrawl's search doesn't
-  // reliably honor site: OR-boolean syntax.
-  const [screenerResults, moneycontrolResults] = await Promise.all([
-    searchWeb(`"${companyName}"${q} financial results annual report site:screener.in`, 1, companyName),
-    searchWeb(`"${companyName}"${q} financial results annual report site:moneycontrol.com`, 1, companyName),
-  ]);
-  const indianFinanceResults = [...screenerResults, ...moneycontrolResults];
+  // Indian D2C/consumer brands analyzed here are or will be). A `site:`
+  // query does NOT reliably restrict results here — confirmed directly
+  // against Bing's own HTML endpoint: even the simplest possible
+  // `site:screener.in Zomato` query returned zomato.com/Wikipedia/Play
+  // Store results with zero screener.in hits, so the operator is being
+  // ignored outright, not just loosely honored (matches the same
+  // already-documented Firecrawl limitation elsewhere in this file — this
+  // isn't backend-specific). Post-filtering a plain query by hostname,
+  // same pattern already used for review-platform matching, is reliable
+  // where the site: operator itself is not.
+  const financeSearchResults = await searchWeb(
+    `"${companyName}"${q} financial results annual report screener.in moneycontrol`,
+    6,
+    companyName
+  );
+  const indianFinanceResults = financeSearchResults.filter((r) => {
+    const host = isUrl(r.url)?.hostname ?? "";
+    return host.includes("screener.in") || host.includes("moneycontrol.com");
+  });
   if (indianFinanceResults.length > 0) {
     const markdown = indianFinanceResults
       .map((r) => `--- from ${r.url} (${r.title ?? "untitled"}) ---\n${r.markdown}`)
