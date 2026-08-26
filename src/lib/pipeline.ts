@@ -297,6 +297,12 @@ const GtmBrandSchema = z.object({
     position: z.string(),
     points_of_difference: z.array(z.string()),
     points_of_parity: z.array(z.string()),
+    ansoff: z.object({
+      quadrant: z
+        .enum(["market_penetration", "product_development", "market_development", "diversification"])
+        .nullable(),
+      rationale: z.string(),
+    }),
   }),
   brand: z.object({
     node_word: z.string().nullable(),
@@ -314,6 +320,14 @@ const GtmBrandSchema = z.object({
     campaign: z
       .object({ enemy: z.string(), stand: z.string(), mantra: z.string() })
       .nullable(),
+    kapferer_prism: z.object({
+      physique: z.string().nullable(),
+      personality: z.string().nullable(),
+      relationship: z.string().nullable(),
+      culture: z.string().nullable(),
+      reflection: z.string().nullable(),
+      self_image: z.string().nullable(),
+    }),
   }),
 });
 type GtmBrandResult = z.infer<typeof GtmBrandSchema>;
@@ -325,6 +339,7 @@ const DEFAULT_GTM_BRAND: GtmBrandResult = {
     position: "insufficient data",
     points_of_difference: [],
     points_of_parity: [],
+    ansoff: { quadrant: null, rationale: "insufficient data" },
   },
   brand: {
     node_word: null,
@@ -333,6 +348,14 @@ const DEFAULT_GTM_BRAND: GtmBrandResult = {
     weakest_cbbe_layer_evidence: "insufficient data",
     personas: [],
     campaign: null,
+    kapferer_prism: {
+      physique: null,
+      personality: null,
+      relationship: null,
+      culture: null,
+      reflection: null,
+      self_image: null,
+    },
   },
 };
 
@@ -358,13 +381,15 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
         .join("\n\n")
     : "(no named competitors found)";
 
-  const system = `You are reasoning through ONE lens only: marketing and branding — for "${companyName}" (direction: ${direction}). Apply the STP/3C/POD-POP/CBBE/node-word/Enemy-Stand-Mantra/brand-fidelity-matrix frameworks in the knowledge base below. Tone: plain language first (what the customer actually experiences), THEN name the framework — never framework-name-dropping with no plain-English anchor.
+  const system = `You are reasoning through ONE lens only: marketing and branding — for "${companyName}" (direction: ${direction}). Apply the STP/3C/POD-POP/CBBE/node-word/Enemy-Stand-Mantra/brand-fidelity-matrix/Kapferer-Prism/Ansoff-Matrix frameworks in the knowledge base below. Tone: plain language first (what the customer actually experiences), THEN name the framework — never framework-name-dropping with no plain-English anchor.
 
 - "gtm": segment/target/position inferred from the product/reviews; points_of_difference = things this product does that named competitors' context does NOT show (grounded in competitor data below, never invented); points_of_parity = things reviews show this product does that competitors also seem to do. Empty arrays if no competitor context exists — do not invent competitor behavior.
+- "gtm.ansoff": which of the 4 Ansoff growth quadrants the recommended direction actually falls into, grounded in what the issues/competitor data show — market_penetration (fix issues to win more of the existing market with the existing product), product_development (build new features/products for existing customers), market_development (take the existing product to a new segment/geography), diversification (new product + new market). null quadrant + "insufficient data" if the evidence doesn't clearly point to one — never force a quadrant.
 - "brand.node_word": the single word this brand owns in customers' minds, ONLY if the evidence supports one. null + "insufficient data" if no clear word emerges — do not force one.
 - "brand.weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — whichever the review evidence shows is weakest.
 - "brand.personas": 2-3 ONLY if the reviews contain enough concrete detail to build one honestly — no invented demographics. Empty array if reviews are too thin.
 - "brand.campaign": Enemy-Stand-Mantra ONLY if a real customer pain point clearly justifies one (enemy = the ideology/behavior/condition the brand fights, NOT a competitor). null if unjustified.
+- "brand.kapferer_prism": Kapferer's Brand Identity Prism, all 6 facets, ONE sentence each, each grounded in review/competitor evidence — physique (tangible/visible traits), personality (character traits as if human), relationship (nature of the brand-consumer bond), culture (values/origins the brand emanates), reflection (who the brand's communication appears to target), self_image (how using it makes the customer feel about themselves). null for any facet the evidence genuinely doesn't support — never a generic filler sentence just to fill the field.
 
 === MARKETING & BRANDING KNOWLEDGE ===
 ${knowledgeBase}
@@ -380,12 +405,19 @@ ${competitorsBlock}
 
 Respond with ONLY a single JSON object (no markdown fences, no commentary) matching exactly:
 {
-  "gtm": { "segment": string, "target": string, "position": string, "points_of_difference": string[], "points_of_parity": string[] },
+  "gtm": {
+    "segment": string, "target": string, "position": string, "points_of_difference": string[], "points_of_parity": string[],
+    "ansoff": { "quadrant": "market_penetration" | "product_development" | "market_development" | "diversification" | null, "rationale": string }
+  },
   "brand": {
     "node_word": string | null, "node_word_evidence": string,
     "weakest_cbbe_layer": string, "weakest_cbbe_layer_evidence": string,
     "personas": [{ "name": string, "context": string, "goals": string, "pain_points": string }],
-    "campaign": { "enemy": string, "stand": string, "mantra": string } | null
+    "campaign": { "enemy": string, "stand": string, "mantra": string } | null,
+    "kapferer_prism": {
+      "physique": string | null, "personality": string | null, "relationship": string | null,
+      "culture": string | null, "reflection": string | null, "self_image": string | null
+    }
   }
 }`;
 
@@ -393,6 +425,11 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     messages: [{ role: "system", content: system }],
     jsonMode: true,
     temperature: 0.2,
+    // Bumped from the 2000 default — adding the Kapferer Prism's 6 facets
+    // and the Ansoff quadrant/rationale meaningfully grew this pass's
+    // required output; this pass's knowledge base is still small enough
+    // (~3.3k tokens) to afford the extra room within Groq's 8k TPM cap.
+    maxTokens: 2200,
   });
 
   const parsed = extractJson(content);
@@ -624,6 +661,15 @@ export async function runReport(
     report.brand.weakest_cbbe_layer = "unknown";
     report.brand.weakest_cbbe_layer_evidence = "No review issues were found to diagnose brand health from.";
     report.brand.campaign = null;
+    report.brand.kapferer_prism = {
+      physique: null,
+      personality: null,
+      relationship: null,
+      culture: null,
+      reflection: null,
+      self_image: null,
+    };
+    report.gtm.ansoff = { quadrant: null, rationale: "No review issues were found to ground a growth direction in." };
   }
 
   return report;

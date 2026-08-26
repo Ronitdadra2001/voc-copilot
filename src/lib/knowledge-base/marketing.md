@@ -87,6 +87,31 @@ what the competitor already owns.
   wasted effort if evidence shows this (e.g. a spec nobody complains about or
   praises).
 
+## Kapferer's Brand Identity Prism (6 facets — diagnose which ones the reviews actually reveal)
+Physique (tangible/visible traits — look, packaging, physical experience),
+Personality (character traits as if the brand were a person), Relationship
+(the nature of the bond it offers the customer — coach, friend, authority),
+Culture (values/origins it emanates), Reflection (who its communication
+appears to target), Self-Image (how using it makes the customer feel about
+themselves). Only fill a facet the review/competitor evidence actually
+supports — a facet with no evidence should say so, not be invented to look
+complete. All 6 facets should stay mutually consistent (a "premium" Physique
+with a "budget" Relationship is a genuine finding worth flagging, not an
+error to paper over).
+
+## Ansoff Matrix (which growth quadrant does the recommended direction actually fall into)
+Existing product + existing market = **Market Penetration** (fix issues to
+win more share of who you already reach — lowest risk). New product +
+existing market = **Product Development** (build for the segment you
+already understand). Existing product + new market = **Market Development**
+(new segment/geography, same offering). New product + new market =
+**Diversification** (highest risk — only recommend if the evidence clearly
+points there, since this is rarely the right call from review data alone).
+Ground the quadrant choice in what the issues actually show — recommending
+"fix these bugs to retain existing users" is Market Penetration; recommending
+"launch a new tier to reach a segment reviews show is currently unserved" is
+Market Development.
+
 ## CDI/BDI — where to recommend spend (only with real geographic data)
 Category Development Index (category sales share ÷ population share) × Brand
 Development Index (own sales share ÷ population share) — only compute this if

@@ -196,6 +196,16 @@ export async function generateDashboardPdf(
     for (const p of report.gtm.points_of_parity) drawText(`• ${p}`);
   }
 
+  if (report.gtm.ansoff) {
+    subHeading("Growth Direction (Ansoff Matrix)");
+    if (report.gtm.ansoff.quadrant) {
+      drawText(report.gtm.ansoff.quadrant.replace(/_/g, " "), { f: bold, extraGapAfter: 2 });
+      drawText(report.gtm.ansoff.rationale, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+    } else {
+      drawText(report.gtm.ansoff.rationale, { color: rgb(0.5, 0.5, 0.5) });
+    }
+  }
+
   // ===== Page 2.5: Brand Diagnosis, Campaign, Personas =====
   if (report.brand) {
     subHeading("Brand Diagnosis — Node Word & Weakest Layer (CBBE)");
@@ -218,6 +228,25 @@ export async function generateDashboardPdf(
       drawText("No customer pain point in the data clearly justifies a campaign angle yet.", {
         color: rgb(0.5, 0.5, 0.5),
       });
+    }
+
+    if (report.brand.kapferer_prism && Object.values(report.brand.kapferer_prism).some((v) => v)) {
+      subHeading("Brand Identity Prism (Kapferer)");
+      const facets: [string, string | null][] = [
+        ["Physique", report.brand.kapferer_prism.physique],
+        ["Personality", report.brand.kapferer_prism.personality],
+        ["Relationship", report.brand.kapferer_prism.relationship],
+        ["Culture", report.brand.kapferer_prism.culture],
+        ["Reflection", report.brand.kapferer_prism.reflection],
+        ["Self-Image", report.brand.kapferer_prism.self_image],
+      ];
+      for (const [label, value] of facets) {
+        drawText(`${label}: ${value ?? "Not enough evidence in the data."}`, {
+          size: 10,
+          color: value ? rgb(0.15, 0.15, 0.2) : rgb(0.5, 0.5, 0.5),
+          extraGapAfter: 2,
+        });
+      }
     }
 
     if (report.brand.personas.length > 0) {

@@ -101,6 +101,14 @@ export interface DashboardReport {
     position: string;
     points_of_difference: string[];
     points_of_parity: string[];
+    /** Ansoff Matrix — which of the 4 growth quadrants the recommended
+     * moves actually fall into, grounded in what the issues/competitor
+     * data show (not a generic growth-strategy essay). null quadrant if
+     * the evidence doesn't clearly point to one. */
+    ansoff: {
+      quadrant: "market_penetration" | "product_development" | "market_development" | "diversification" | null;
+      rationale: string;
+    };
   };
 
   /** Finance section — own company's real findings plus, per named
@@ -157,5 +165,17 @@ export interface DashboardReport {
       stand: string;
       mantra: string;
     } | null;
+    /** Kapferer's Brand Identity Prism — all 6 facets, each grounded in
+     * review/competitor evidence. null (with an explanatory evidence
+     * string) for any facet the data genuinely doesn't support — never a
+     * generic filler sentence. */
+    kapferer_prism: {
+      physique: string | null;
+      personality: string | null;
+      relationship: string | null;
+      culture: string | null;
+      reflection: string | null;
+      self_image: string | null;
+    };
   };
 }

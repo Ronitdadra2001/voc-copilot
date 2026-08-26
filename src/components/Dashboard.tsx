@@ -351,6 +351,23 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
               )}
             </div>
           </div>
+          {report.gtm.ansoff && (
+            <div className="mt-3 pt-3 border-t divider">
+              <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
+                Growth direction (Ansoff Matrix)
+              </p>
+              {report.gtm.ansoff.quadrant ? (
+                <p className="text-sm text-fg">
+                  <span className="badge-accent capitalize">
+                    {report.gtm.ansoff.quadrant.replace(/_/g, " ")}
+                  </span>{" "}
+                  — {report.gtm.ansoff.rationale}
+                </p>
+              ) : (
+                <p className="text-sm text-fg-soft">{report.gtm.ansoff.rationale}</p>
+              )}
+            </div>
+          )}
         </SectionCard>
       </div>
 
@@ -415,6 +432,31 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           </SectionCard>
         </div>
       )}
+
+      {report.brand?.kapferer_prism &&
+        Object.values(report.brand.kapferer_prism).some((v) => v) && (
+          <SectionCard title="Brand Identity Prism (Kapferer)">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
+              {(
+                [
+                  ["physique", "Physique"],
+                  ["personality", "Personality"],
+                  ["relationship", "Relationship"],
+                  ["culture", "Culture"],
+                  ["reflection", "Reflection"],
+                  ["self_image", "Self-Image"],
+                ] as const
+              ).map(([key, label]) => (
+                <div key={key} className="card p-3">
+                  <p className="text-xs font-semibold uppercase text-fg-soft mb-1">{label}</p>
+                  <p className={report.brand.kapferer_prism[key] ? "text-fg" : "text-fg-soft"}>
+                    {report.brand.kapferer_prism[key] ?? "Not enough evidence in the data."}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+        )}
 
       {report.brand?.personas && report.brand.personas.length > 0 && (
         <SectionCard title="Customer Personas (from review evidence)">
