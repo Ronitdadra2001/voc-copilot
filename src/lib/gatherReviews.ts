@@ -1,4 +1,3 @@
-import { firecrawl } from "./clients";
 import { chatCompletion } from "./llm";
 import { scrapeWithPythonService } from "./pythonScraper";
 import { scrapeAppStoreReviews, scrapeGooglePlayReviews, resolveStoreAppName } from "./appReviews";
@@ -162,62 +161,102 @@ async function tryStep(
 // prompts stay small regardless of how big the source page is.
 const MAX_CHARS_PER_RESULT = 3000;
 
-/** Strips markdown link/image syntax down to plain visible text, so a
- * DuckDuckGo results block (full of `[text](url)` and `![](icon)` noise)
- * reads as normal prose for the LLM steps that consume it downstream. */
-function stripMarkdownLinks(text: string): string {
+/** Strips HTML tags and entities down to plain visible text. */
+function stripHtml(text: string): string {
   return text
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
 
-/** DuckDuckGo wraps every result href as `duckduckgo.com/l/?uddg=<encoded
+/** DuckDuckGo wraps every result href as `//duckduckgo.com/l/?uddg=<encoded
  * real URL>&rut=...` — decode that back to the actual destination URL. */
 function decodeDuckDuckGoUrl(href: string): string | null {
   try {
-    const uddg = new URL(href).searchParams.get("uddg");
+    const withScheme = href.startsWith("//") ? `https:${href}` : href;
+    const uddg = new URL(withScheme).searchParams.get("uddg");
     return uddg ? decodeURIComponent(uddg) : null;
   } catch {
     return null;
   }
 }
 
-/** Free fallback search when Firecrawl's paid /search is unavailable
- * (confirmed in practice: the account can run out of search credits, which
- * silently zeroes out competitor/financial discovery otherwise). Scrapes
- * DuckDuckGo's plain HTML results page via the crawl4ai Python service —
- * DuckDuckGo's HTML endpoint needs no JS/login and is scrape-friendly. Real
- * search results, real URLs, real snippet text — just less content per
- * result than a full Firecrawl scrape, since we only get the snippet DDG
- * shows, not the target page's full body. */
+const SEARCH_TIMEOUT_MS = 10000;
+
+/** Plain, dependency-free page fetch — no headless browser, no external
+ * scraper service, no API key. Works for server-rendered/static pages;
+ * won't see content a page only renders via client-side JS. Used as the
+ * first attempt for direct review-platform URLs specifically because it's
+ * the only scraping path in this file with zero external dependencies —
+ * crawl4ai/scrapling/selenium/scrapy all route through a Python scraper
+ * service that was never actually deployed to production (confirmed:
+ * SCRAPER_SERVICE_URL is unset there), and Firecrawl was removed entirely
+ * per direct instruction. Kept deliberately simple; this is a fallback of
+ * last resort, not meant to replace a real rendering engine. */
+async function scrapePlainFetch(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent":
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+    },
+    signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+  });
+  if (!res.ok) throw new Error(`plain fetch ${res.status}`);
+  const html = await res.text();
+  // Strip script/style blocks first so their contents never leak into the
+  // stripped text (stripHtml only removes tags, not element contents).
+  const withoutScripts = html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "");
+  return stripHtml(withoutScripts);
+}
+
+/** Primary (only) web search — DuckDuckGo's plain HTML results page, fetched
+ * directly, no external service or API key involved at all. Firecrawl was
+ * removed as a dependency entirely (its key was found empty in production,
+ * silently zeroing out every review/competitor/financial web search behind
+ * a caught exception — confirmed live via `vercel env pull`) and the old
+ * fallback path routed through a Python scraper service that was also never
+ * deployed to production, so it was equally dead. This has no external
+ * dependency beyond DuckDuckGo itself being reachable. Real search results,
+ * real URLs, real snippet text — just the snippet DDG shows, not each
+ * target page's full body, which Firecrawl used to provide; less content
+ * per result but a source that's actually online. */
 async function searchWebViaDuckDuckGo(
   query: string,
   limit: number
 ): Promise<{ url: string; title?: string; markdown: string }[]> {
   try {
-    const page = await scrapeWithPythonService(
-      `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`,
-      "crawl4ai"
-    );
-    const blocks = page.split(/\n##\s+\[/).slice(1); // first chunk is page chrome, discard
+    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      },
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return [];
+    const html = await res.text();
+
+    // Each result lives in a `result results_links...` block containing a
+    // `result__a` title link and a `result__snippet` block — stable,
+    // long-standing structure of DuckDuckGo's no-JS HTML results page.
     const items: { url: string; title?: string; markdown: string }[] = [];
-    for (const block of blocks) {
-      const linkMatch = block.match(/^(.+?)\]\((https:\/\/duckduckgo\.com\/l\/\?uddg=[^)]+)\)/);
+    const resultBlocks = html.split(/<div class="result results_links/).slice(1);
+    for (const block of resultBlocks) {
+      const linkMatch = block.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
       if (!linkMatch) continue;
-      const title = stripMarkdownLinks(linkMatch[1]);
-      const url = decodeDuckDuckGoUrl(linkMatch[2]);
+      const url = decodeDuckDuckGoUrl(linkMatch[1]);
       if (!url) continue;
-      // Everything after the matched title+link is the favicon image, the
-      // repeated display-url link, and the actual snippet — all in valid
-      // `[text](url)`/`![](url)` form, so stripping from THIS point on (not
-      // the raw block) avoids leaving the title's dangling `](url)` behind,
-      // which isn't valid markdown-link syntax on its own and survived the
-      // stripper untouched, contaminating every result with URL fragments.
-      const rest = block.slice(linkMatch[0].length);
-      const snippet = stripMarkdownLinks(rest).slice(0, MAX_CHARS_PER_RESULT);
-      if (!snippet) continue;
+      const title = stripHtml(linkMatch[2]);
+      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+      const snippet = snippetMatch ? stripHtml(snippetMatch[1]).slice(0, MAX_CHARS_PER_RESULT) : "";
+      if (!title && !snippet) continue;
       items.push({ url, title, markdown: `${title}. ${snippet}` });
       if (items.length >= limit) break;
     }
@@ -234,7 +273,7 @@ async function searchWebViaDuckDuckGo(
  * "Anytype" → an unrelated government annual report) — without this check,
  * that noise reads as real data about the wrong company entirely.
  */
-export type SearchEngine = "firecrawl" | "duckduckgo";
+export type SearchEngine = "duckduckgo";
 export interface SearchResultItem {
   url: string;
   title?: string;
@@ -242,6 +281,7 @@ export interface SearchResultItem {
   engine: SearchEngine;
 }
 
+// Firecrawl deliberately removed as a dependency — see searchWebViaDuckDuckGo.
 async function searchWeb(
   query: string,
   limit = 4,
@@ -250,8 +290,7 @@ async function searchWeb(
   const needle = mustMention?.toLowerCase();
 
   function applyFilters(
-    raw: { url: string; title?: string; markdown: string }[],
-    engine: SearchEngine
+    raw: { url: string; title?: string; markdown: string }[]
   ): SearchResultItem[] {
     const items: SearchResultItem[] = [];
     for (const doc of raw) {
@@ -265,32 +304,14 @@ async function searchWeb(
         url: doc.url,
         title: doc.title,
         markdown: doc.markdown.slice(0, MAX_CHARS_PER_RESULT),
-        engine,
+        engine: "duckduckgo",
       });
     }
     return items;
   }
 
-  try {
-    const results = await firecrawl.search(query, {
-      limit,
-      sources: ["web"],
-      scrapeOptions: { formats: ["markdown"] },
-    });
-    const raw = (results.web ?? []) as { url?: string; title?: string; markdown?: string }[];
-    const filtered = applyFilters(
-      raw.filter((d): d is { url: string; title?: string; markdown: string } =>
-        Boolean(d.url && d.markdown)
-      ),
-      "firecrawl"
-    );
-    if (filtered.length > 0) return filtered;
-  } catch {
-    // fall through to the free fallback below
-  }
-
-  const fallback = await searchWebViaDuckDuckGo(query, limit);
-  return applyFilters(fallback, "duckduckgo");
+  const results = await searchWebViaDuckDuckGo(query, limit);
+  return applyFilters(results);
 }
 
 /**
@@ -340,23 +361,17 @@ export async function autoGatherReviews(
   }
 
   if (url && isKnownReviewPlatform(url)) {
-    // The user pointed directly at a reviews page — scrape it directly,
-    // free scrapers first.
+    // The user pointed directly at a reviews page — scrape it directly.
+    // Plain fetch first: zero external dependencies, works for server-
+    // rendered pages. crawl4ai/scrapling/selenium/scrapy all route through
+    // a Python scraper service that isn't reachable in production (never
+    // deployed there — SCRAPER_SERVICE_URL is unset) — kept as later
+    // attempts since they cost nothing to try and will start working the
+    // moment that service is actually deployed somewhere.
     for (const [label, fn] of [
+      ["plain-fetch", () => scrapePlainFetch(companyOrLink)],
       ["crawl4ai", () => scrapeWithPythonService(companyOrLink, "crawl4ai")],
       ["scrapling", () => scrapeWithPythonService(companyOrLink, "scrapling")],
-      [
-        "firecrawl",
-        async () => {
-          const doc = await firecrawl.scrape(companyOrLink, { formats: ["markdown"] });
-          return doc.markdown ?? "";
-        },
-      ],
-      // Last-resort engines, tried only if the three above all fail (JS-heavy
-      // pages crawl4ai/scrapling/firecrawl can't render, or ones actively
-      // blocking headless fetches) — selenium drives a real Chrome instance,
-      // scrapy is a plain HTTP+CSS/XPath fetch. Both were wired into the
-      // Python scraper service but never actually called from here before.
       ["selenium", () => scrapeWithPythonService(companyOrLink, "selenium")],
       ["scrapy", () => scrapeWithPythonService(companyOrLink, "scrapy")],
     ] as const) {
@@ -434,7 +449,6 @@ export async function autoGatherReviews(
   for (const item of webResults) {
     reviewChunks.push(`--- from ${item.url} (${item.title ?? "untitled"}) ---\n${item.markdown}`);
   }
-  if (webResults.some((r) => r.engine === "firecrawl")) sourcesUsed.push("firecrawl-search:reviews");
   if (webResults.some((r) => r.engine === "duckduckgo")) sourcesUsed.push("duckduckgo-search:reviews");
 
   if (playStoreContent?.content.trim()) {

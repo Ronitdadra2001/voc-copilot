@@ -1,6 +1,5 @@
 import OpenAI from "openai";
 import Groq from "groq-sdk";
-import Firecrawl from "@mendable/firecrawl-js";
 import { ApifyClient } from "apify-client";
 
 export const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -17,5 +16,4 @@ export const openrouter = new OpenAI({
 // contents/parts request shape), not an OpenAI-compatible endpoint. See
 // callGemini in llm.ts, which calls this directly via fetch().
 export const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-export const firecrawl = new Firecrawl({ apiKey: process.env.FIRECRAWL_API_KEY });
 export const apify = new ApifyClient({ token: process.env.APIFY_API_TOKEN });
