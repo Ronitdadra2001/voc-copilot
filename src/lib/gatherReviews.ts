@@ -181,7 +181,12 @@ function stripHtml(text: string): string {
  * base64-decoding (with padding restored) yields the real URL. */
 function decodeBingRedirectUrl(href: string): string | null {
   try {
-    const parsed = new URL(href);
+    // The href comes straight out of raw HTML attribute text, where Bing
+    // encodes literal "&" as "&amp;" — URLSearchParams needs the real "&"
+    // separator, so this must be un-escaped before parsing or every query
+    // param after the first merges into one unparseable blob (confirmed
+    // live: this exact bug left every result URL undecoded).
+    const parsed = new URL(href.replace(/&amp;/g, "&"));
     const u = parsed.searchParams.get("u");
     if (!u || !u.startsWith("a1")) return href; // not a redirect wrapper — already a direct URL
     const b64 = u.slice(2).replace(/-/g, "+").replace(/_/g, "/");
