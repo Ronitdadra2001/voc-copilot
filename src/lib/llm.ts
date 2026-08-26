@@ -28,6 +28,15 @@ interface Provider {
 
 const DEFAULT_MAX_OUTPUT_TOKENS = 2000;
 
+// No provider call had an explicit timeout — confirmed live: analyze()
+// hung for 2+ minutes with no response, almost certainly a provider
+// (Gemini's flash-latest under "high demand," most likely) simply taking a
+// very long time to respond rather than erroring, which none of the retry/
+// failover logic can react to if the call itself never returns. Every
+// provider call below is now bounded so a slow provider fails over to the
+// next one instead of hanging the whole request.
+const PROVIDER_TIMEOUT_MS = 15000;
+
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -76,7 +85,7 @@ async function callGroqOnce(opts: ChatOptions) {
     ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
-  const completion = await groq.chat.completions.create(params);
+  const completion = await groq.chat.completions.create(params, { timeout: PROVIDER_TIMEOUT_MS });
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("Empty response from Groq");
   return content;
@@ -156,6 +165,7 @@ async function callGeminiModel(
       method: "POST",
       headers: { "Content-Type": "application/json", "X-goog-api-key": GEMINI_API_KEY },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(PROVIDER_TIMEOUT_MS),
     }
   );
   if (!res.ok) {
@@ -185,26 +195,32 @@ async function callGemini(opts: ChatOptions) {
 }
 
 async function callOpenAI({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
-  const completion = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    messages,
-    temperature,
-    max_tokens: maxTokens,
-    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
-  });
+  const completion = await openai.chat.completions.create(
+    {
+      model: "gpt-4o-mini",
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+    },
+    { timeout: PROVIDER_TIMEOUT_MS }
+  );
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("Empty response from OpenAI");
   return content;
 }
 
 async function callOpenRouter({ messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS }: ChatOptions) {
-  const completion = await openrouter.chat.completions.create({
-    model: "openai/gpt-4o-mini",
-    messages,
-    temperature,
-    max_tokens: maxTokens,
-    ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
-  });
+  const completion = await openrouter.chat.completions.create(
+    {
+      model: "openai/gpt-4o-mini",
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+      ...(jsonMode ? { response_format: { type: "json_object" as const } } : {}),
+    },
+    { timeout: PROVIDER_TIMEOUT_MS }
+  );
   const content = completion.choices[0]?.message?.content;
   if (!content) throw new Error("Empty response from OpenRouter");
   return content;
