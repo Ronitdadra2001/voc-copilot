@@ -175,13 +175,18 @@ function stripHtml(text: string): string {
     .trim();
 }
 
-/** DuckDuckGo wraps every result href as `//duckduckgo.com/l/?uddg=<encoded
- * real URL>&rut=...` — decode that back to the actual destination URL. */
-function decodeDuckDuckGoUrl(href: string): string | null {
+/** Bing wraps every result href as a `bing.com/ck/a?...&u=a1<base64url>&...`
+ * redirect — decode that back to the actual destination URL. Confirmed
+ * directly against a real response: stripping the "a1" prefix and
+ * base64-decoding (with padding restored) yields the real URL. */
+function decodeBingRedirectUrl(href: string): string | null {
   try {
-    const withScheme = href.startsWith("//") ? `https:${href}` : href;
-    const uddg = new URL(withScheme).searchParams.get("uddg");
-    return uddg ? decodeURIComponent(uddg) : null;
+    const parsed = new URL(href);
+    const u = parsed.searchParams.get("u");
+    if (!u || !u.startsWith("a1")) return href; // not a redirect wrapper — already a direct URL
+    const b64 = u.slice(2).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "=".repeat((4 - (b64.length % 4)) % 4);
+    return Buffer.from(padded, "base64").toString("utf-8");
   } catch {
     return null;
   }
@@ -217,23 +222,25 @@ async function scrapePlainFetch(url: string): Promise<string> {
   return stripHtml(withoutScripts);
 }
 
-/** Primary (only) web search — DuckDuckGo's plain HTML results page, fetched
+/** Primary (only) web search — Bing's plain HTML results page, fetched
  * directly, no external service or API key involved at all. Firecrawl was
- * removed as a dependency entirely (its key was found empty in production,
- * silently zeroing out every review/competitor/financial web search behind
- * a caught exception — confirmed live via `vercel env pull`) and the old
- * fallback path routed through a Python scraper service that was also never
- * deployed to production, so it was equally dead. This has no external
- * dependency beyond DuckDuckGo itself being reachable. Real search results,
- * real URLs, real snippet text — just the snippet DDG shows, not each
- * target page's full body, which Firecrawl used to provide; less content
- * per result but a source that's actually online. */
-async function searchWebViaDuckDuckGo(
+ * removed entirely (its key was found empty in production, silently
+ * zeroing out every review/competitor/financial web search behind a caught
+ * exception — confirmed live via `vercel env pull`). DuckDuckGo was tried
+ * first as the free replacement but confirmed live to return an HTTP 202
+ * bot-challenge page with zero results, on both its main and "lite"
+ * endpoints, from this environment's IP — Bing's HTML results page, tested
+ * the same way, returns real HTTP 200 results with no such block. No
+ * external dependency beyond Bing itself being reachable. Real search
+ * results, real URLs, real snippet text — just the snippet Bing shows, not
+ * each target page's full body, which Firecrawl used to provide; less
+ * content per result but a source that's actually reachable. */
+async function searchWebViaBing(
   query: string,
   limit: number
 ): Promise<{ url: string; title?: string; markdown: string }[]> {
   try {
-    const res = await fetch(`https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`, {
+    const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
@@ -243,18 +250,18 @@ async function searchWebViaDuckDuckGo(
     if (!res.ok) return [];
     const html = await res.text();
 
-    // Each result lives in a `result results_links...` block containing a
-    // `result__a` title link and a `result__snippet` block — stable,
-    // long-standing structure of DuckDuckGo's no-JS HTML results page.
+    // Each organic result lives in a `<li class="b_algo"` block containing
+    // an `<h2><a href=...>` title link and a `<p class="b_lineclampN">`
+    // snippet — confirmed directly against a real response.
     const items: { url: string; title?: string; markdown: string }[] = [];
-    const resultBlocks = html.split(/<div class="result results_links/).slice(1);
+    const resultBlocks = html.split(/<li class="b_algo"/).slice(1);
     for (const block of resultBlocks) {
-      const linkMatch = block.match(/class="result__a"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/);
+      const linkMatch = block.match(/<h2[^>]*><a[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a><\/h2>/);
       if (!linkMatch) continue;
-      const url = decodeDuckDuckGoUrl(linkMatch[1]);
+      const url = decodeBingRedirectUrl(linkMatch[1]);
       if (!url) continue;
       const title = stripHtml(linkMatch[2]);
-      const snippetMatch = block.match(/class="result__snippet"[^>]*>([\s\S]*?)<\/a>/);
+      const snippetMatch = block.match(/<p class="b_lineclamp\d*"[^>]*>([\s\S]*?)<\/p>/);
       const snippet = snippetMatch ? stripHtml(snippetMatch[1]).slice(0, MAX_CHARS_PER_RESULT) : "";
       if (!title && !snippet) continue;
       items.push({ url, title, markdown: `${title}. ${snippet}` });
@@ -273,7 +280,7 @@ async function searchWebViaDuckDuckGo(
  * "Anytype" → an unrelated government annual report) — without this check,
  * that noise reads as real data about the wrong company entirely.
  */
-export type SearchEngine = "duckduckgo";
+export type SearchEngine = "bing";
 export interface SearchResultItem {
   url: string;
   title?: string;
@@ -281,7 +288,7 @@ export interface SearchResultItem {
   engine: SearchEngine;
 }
 
-// Firecrawl deliberately removed as a dependency — see searchWebViaDuckDuckGo.
+// Firecrawl deliberately removed as a dependency — see searchWebViaBing.
 async function searchWeb(
   query: string,
   limit = 4,
@@ -304,13 +311,13 @@ async function searchWeb(
         url: doc.url,
         title: doc.title,
         markdown: doc.markdown.slice(0, MAX_CHARS_PER_RESULT),
-        engine: "duckduckgo",
+        engine: "bing",
       });
     }
     return items;
   }
 
-  const results = await searchWebViaDuckDuckGo(query, limit);
+  const results = await searchWebViaBing(query, limit);
   return applyFilters(results);
 }
 
@@ -449,7 +456,7 @@ export async function autoGatherReviews(
   for (const item of webResults) {
     reviewChunks.push(`--- from ${item.url} (${item.title ?? "untitled"}) ---\n${item.markdown}`);
   }
-  if (webResults.some((r) => r.engine === "duckduckgo")) sourcesUsed.push("duckduckgo-search:reviews");
+  if (webResults.some((r) => r.engine === "bing")) sourcesUsed.push("bing-search:reviews");
 
   if (playStoreContent?.content.trim()) {
     reviewChunks.push(`--- from Google Play reviews ---\n${playStoreContent.content}`);
