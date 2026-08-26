@@ -393,7 +393,12 @@ export async function autoGatherReviews(
       // slots that could otherwise surface real review content from
       // platforms that actually work.
       `${companyName}${descSuffix} reviews complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com OR site:capterra.com OR site:sitejabber.com OR site:consumeraffairs.com OR site:mouthshut.com)`,
-      8,
+      // Firecrawl fetches full-page content for every result in one call —
+      // 8 was taking 30-40s+ on its own for review-heavy pages. 4 real
+      // sources is still enough for a meaningful analysis and cuts this
+      // substantially; speed matters more than marginal extra coverage
+      // here.
+      4,
       // Without this, near-miss results (a platform's own homepage, a
       // same-category unrelated brand, a generic "reviews are fake" thread)
       // were passing straight through as if they were real data about this
