@@ -27,6 +27,8 @@ a WIDE set of these across issues, not the same 2-3 every time.
 20. **Enemy-Stand-Mantra**: frame a recurring pain as an ideology/condition the brand fights — Enemy must be a condition, never a named competitor.
 21. **RFM Analysis**: prioritize retention effort by customer value (Recency/Frequency/Monetary) when purchase data exists, not just complaint volume.
 22. **Brand Switch Matrix signal**: a review naming a specific competitor switched TO is a defection signal — track it separately from generic complaints.
+23. **Coping style in brand crisis** (Active/Avoidant/Acceptance/Denial): a written complaint is an Active Coper — the visible, smaller risk. The bigger risk is the Avoidant Coper who never writes a review and just stops buying; low review volume on a real problem can mean "nobody's complaining," not "nobody's affected" — say so rather than reading silence as safety.
+24. **Trust × Involvement relationship depth** (Brand Partner/Seeker/Habitual Buyer/Switcher): high trust + high involvement = Brand Partner (reward them, don't take for granted); high involvement + low trust = Seeker (close to converting — needs proof, not a discount); low involvement + high trust = Habitual Buyer (loyal but passive — vulnerable the moment a rival undercuts price); low both = Switcher (buys on deal/availability only — expensive to chase without unit economics that work). Distinct from the Brand Fidelity Matrix above (severity of a specific transgression) — this one diagnoses the ongoing relationship a complaining customer has with the brand before recommending how hard to fight for them.
 
 Weak: "Customers are unhappy with delivery speed." Strong: "Delivery-delay
 complaints cluster at the Retention stage (AAAERRR) among repeat customers

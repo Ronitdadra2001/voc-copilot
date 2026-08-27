@@ -136,6 +136,37 @@ true asset; a side category stuck at "recognized but not recalled" is not a
 demand problem, it's an **awareness** problem — don't recommend a product fix
 for a category customers simply don't know the brand offers.
 
+## Brand posture: Offensive, Defensive, or Assertive
+Which posture the evidence actually calls for, before recommending a specific
+tactic:
+- **Offensive** (attack a leader / expand fast): challenger pricing, disruptive
+  innovation, a flanker sub-brand to hit a segment the main brand can't touch,
+  or aggressive acquisition spend. Right when reviews show a genuine
+  competitor weakness or an underserved segment to grab.
+- **Defensive** (protect a position already won): endorsement branding
+  (borrowing a trusted parent brand's credibility for a new line), a halo
+  product that lifts the whole portfolio's perception, or leaning on brand
+  heritage/exclusivity. Right when reviews show trust/loyalty already exists
+  but is exposed to a specific threat (a cheaper entrant, a copycat).
+- **Assertive** (build steadily, no market war): lifestyle/purpose branding,
+  cult-community loyalty, or sustainability as a core pillar — compounds
+  identity over time rather than reacting to a competitor. Right when the
+  evidence shows no acute competitive threat, just a brand that hasn't
+  earned a strong identity yet.
+Never recommend Offensive tactics (price war, aggressive acquisition spend)
+on top of unresolved Performance-layer complaints (see CBBE above) — that
+just buys more traffic to a broken experience.
+
+## Brand Archetypes (which personality do the reviews/marketing copy actually project?)
+Innocent (safety, optimism), Explorer (adventure, discovery), Sage (expertise,
+truth), Hero (achievement, overcoming), Outlaw (rebellion, breaking norms),
+Magician (transformation), Lover (passion, intimacy), Jester (humor, fun),
+Caregiver (nurturing, protection), Ruler (status, control), Creator
+(innovation, self-expression), Everyman (relatable, approachable). Only name
+an archetype the tone-of-voice/packaging/messaging evidence actually supports
+— and flag a **mismatch** as a real finding (e.g. Ruler-priced product with
+Everyman messaging reads as confused positioning, not a stylistic choice).
+
 ## CDI/BDI — where to recommend spend (only with real geographic data)
 Category Development Index (category sales share ÷ population share) × Brand
 Development Index (own sales share ÷ population share) — only compute this if
