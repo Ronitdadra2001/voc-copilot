@@ -132,14 +132,27 @@ async function callGeminiModel(
   const { messages, jsonMode, temperature = 0.3, maxTokens = DEFAULT_MAX_OUTPUT_TOKENS } = opts;
   if (!GEMINI_API_KEY) throw new Error("GEMINI_API_KEY not set");
 
+  // Folding system messages into a leading "user" content entry (instead
+  // of Gemini's separate systemInstruction field) rather than dropping
+  // them when there are no other turns — confirmed live: most calls in
+  // this app are system-message-only (no separate user turn), and
+  // systemInstruction-with-empty-contents gets rejected outright ("contents
+  // is not specified"). Folding into contents guarantees at least one
+  // entry exists as long as there's at least one message at all.
   const systemMessages = messages.filter((m) => m.role === "system");
   const turns = messages.filter((m) => m.role !== "system");
-
-  const body: Record<string, unknown> = {
-    contents: turns.map((m) => ({
+  const contents = [
+    ...(systemMessages.length > 0
+      ? [{ role: "user", parts: [{ text: systemMessages.map((m) => m.content).join("\n\n") }] }]
+      : []),
+    ...turns.map((m) => ({
       role: m.role === "assistant" ? "model" : "user",
       parts: [{ text: m.content }],
     })),
+  ];
+
+  const body: Record<string, unknown> = {
+    contents,
     generationConfig: {
       temperature,
       maxOutputTokens: maxTokens,
@@ -153,11 +166,6 @@ async function callGeminiModel(
       ...(jsonMode ? { responseMimeType: "application/json" } : {}),
     },
   };
-  if (systemMessages.length > 0) {
-    body.systemInstruction = {
-      parts: [{ text: systemMessages.map((m) => m.content).join("\n\n") }],
-    };
-  }
 
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
