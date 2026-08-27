@@ -97,10 +97,32 @@ function splitReviews(raw: string): string[] {
   return candidates.filter(looksLikeReview);
 }
 
+// LLM JSON-mode output occasionally isn't quite valid JSON — confirmed live
+// via "Expected property name or '}' in JSON at position ..." on real report
+// generations, most likely a trailing comma the model left before a closing
+// brace/bracket when a field near the end of a large schema (this app's
+// schemas grew substantially this session) got cut short mid-list. A strict
+// JSON.parse has no tolerance for that single-character defect and throws
+// away an otherwise-complete, otherwise-valid response. Retry once with this
+// one defect class stripped before giving up — cheap, safe (only rewrites
+// syntax JSON.parse already rejected, never touches valid content).
+function repairJsonSyntax(text: string): string {
+  return text.replace(/,(\s*[}\]])/g, "$1");
+}
+
 function extractJson(content: string): unknown {
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const candidate = fenced ? fenced[1] : content;
-  return JSON.parse(candidate.trim());
+  const trimmed = candidate.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch (err) {
+    try {
+      return JSON.parse(repairJsonSyntax(trimmed));
+    } catch {
+      throw err; // report the ORIGINAL parse error — it's the more useful one to debug from
+    }
+  }
 }
 
 export async function runAnalysis(
