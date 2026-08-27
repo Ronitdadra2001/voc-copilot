@@ -553,10 +553,15 @@ async function tryDirectScreenerUrl(
     const text = stripHtml(html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, ""));
     // Verify the page is actually about this company, not a coincidentally-
     // valid but unrelated ticker (e.g. a short/common name guess landing on
-    // some other listed company) — screener.in always shows the registered
-    // company name prominently near the top of the page.
+    // some other listed company). Widened from 500 to 2000 chars — confirmed
+    // live: screener.in's header/nav boilerplate alone runs ~850 chars
+    // before the actual company name appears (e.g. Nykaa's screener.in page
+    // is titled "FSN E-Commerce Ventures Ltd", its legal name — "Nykaa"
+    // itself only shows up in the "popularly known as Nykaa" business
+    // description a bit further down), and the tighter window was rejecting
+    // a correct ticker guess as if it were a mismatch.
     const nameWords = companyName.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
-    const headText = text.slice(0, 500).toLowerCase();
+    const headText = text.slice(0, 2000).toLowerCase();
     if (nameWords.length > 0 && !nameWords.some((w) => headText.includes(w))) return null;
     if (text.trim().length < MIN_USEFUL_LENGTH) return null;
     return { url, markdown: text.slice(0, MAX_CHARS_PER_RESULT) };
