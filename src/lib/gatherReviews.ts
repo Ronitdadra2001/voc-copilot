@@ -529,11 +529,55 @@ export async function gatherCompetitorContext(
  * reduces but does not eliminate name collisions — the report generation's
  * own instruction to only use facts literally present in the source text is
  * the actual backstop against attributing the wrong company's numbers. */
+// screener.in's company URLs use the NSE/BSE ticker symbol, not the brand
+// name (confirmed live: "Zomato" 404s — the company renamed to Eternal Ltd
+// in late 2024 and its ticker is ETERNAL; "TCS", "NYKAA", "SWIGGY" work
+// directly). A plain, all-caps, alphanumeric-only guess from the company
+// name hits often enough for straightforward D2C/consumer brand names to be
+// worth trying BEFORE the unreliable search path below — it's a single
+// cheap fetch, and when it doesn't match a real ticker screener.in just
+// 404s, which is indistinguishable from "not found" and costs nothing extra.
+async function tryDirectScreenerUrl(
+  companyName: string
+): Promise<{ url: string; markdown: string } | null> {
+  const guess = companyName.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (!guess) return null;
+  const url = `https://www.screener.in/company/${guess}/`;
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+      signal: AbortSignal.timeout(SEARCH_TIMEOUT_MS),
+    });
+    if (!res.ok) return null; // 404 = ticker guess didn't match a real company, not an error
+    const html = await res.text();
+    const text = stripHtml(html.replace(/<script[\s\S]*?<\/script>/gi, "").replace(/<style[\s\S]*?<\/style>/gi, ""));
+    // Verify the page is actually about this company, not a coincidentally-
+    // valid but unrelated ticker (e.g. a short/common name guess landing on
+    // some other listed company) — screener.in always shows the registered
+    // company name prominently near the top of the page.
+    const nameWords = companyName.toLowerCase().split(/\s+/).filter((w) => w.length >= 3);
+    const headText = text.slice(0, 500).toLowerCase();
+    if (nameWords.length > 0 && !nameWords.some((w) => headText.includes(w))) return null;
+    if (text.trim().length < MIN_USEFUL_LENGTH) return null;
+    return { url, markdown: text.slice(0, MAX_CHARS_PER_RESULT) };
+  } catch {
+    return null;
+  }
+}
+
 export async function gatherFinancialContext(
   companyName: string,
   qualifier = ""
 ): Promise<{ markdown: string; found: boolean }> {
   const q = qualifier.trim() ? ` ${qualifier.trim()}` : "";
+
+  const direct = await tryDirectScreenerUrl(companyName);
+  if (direct) {
+    return {
+      markdown: `--- from ${direct.url} (${companyName} — screener.in) ---\n${direct.markdown}`,
+      found: true,
+    };
+  }
 
   // screener.in and moneycontrol.com carry real, structured financial
   // statements (revenue, margins, ratios) for every NSE/BSE-listed Indian
@@ -548,7 +592,9 @@ export async function gatherFinancialContext(
   // already-documented Firecrawl limitation elsewhere in this file — this
   // isn't backend-specific). Post-filtering a plain query by hostname,
   // same pattern already used for review-platform matching, is reliable
-  // where the site: operator itself is not.
+  // where the site: operator itself is not. Kept as a fallback below the
+  // direct-URL attempt above, which is confirmed more reliable for the
+  // common case (a real, well-known Indian public company).
   const financeSearchResults = await searchWeb(
     `"${companyName}"${q} financial results annual report screener.in moneycontrol`,
     6,
