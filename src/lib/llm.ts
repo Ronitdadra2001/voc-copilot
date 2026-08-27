@@ -35,7 +35,20 @@ const DEFAULT_MAX_OUTPUT_TOKENS = 2000;
 // failover logic can react to if the call itself never returns. Every
 // provider call below is now bounded so a slow provider fails over to the
 // next one instead of hanging the whole request.
-const PROVIDER_TIMEOUT_MS = 15000;
+//
+// Raised from 15s to 45s — confirmed live: with OpenAI (account quota
+// exhausted) and OpenRouter (near-zero credit) both dead on arrival, and
+// Groq's 8k TPM cap now regularly too small for this session's larger
+// knowledge-base/report prompts, Gemini is effectively the ONLY provider
+// that can actually serve a request right now. A 15s timeout was cutting
+// Gemini off mid-response on a real, larger-but-legitimate request ("All
+// LLM providers unavailable... Gemini: aborted due to timeout") before it
+// could finish, then cascading into three fallbacks that were guaranteed
+// to fail anyway. This app's serverless functions have been confirmed to
+// run 100-150s+ end to end, so 45s per provider attempt still leaves
+// comfortable room for a real fallback chain while no longer prematurely
+// killing the one provider actually capable of answering.
+const PROVIDER_TIMEOUT_MS = 45000;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
