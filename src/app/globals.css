@@ -15,6 +15,38 @@
   /* --font-sans / --font-mono are defined by next/font in layout.tsx (Fira
      Sans / Fira Code, self-hosted) via the html element's class — not
      redeclared here, so there's exactly one source of truth for them. */
+
+  /* Chart-only tokens (dataviz skill's reference palette) — kept separate
+     from the --color-* tokens above because charts need their own surface/
+     ink/gridline roles and an 8-slot categorical series ramp, none of which
+     the general UI tokens cover. Previously DashboardCharts.tsx hardcoded
+     these as plain hex with no dark-mode variant at all — confirmed via the
+     skill's own validator: that palette FAILED both light and dark mode
+     (lightness-band and normal-vision-floor fails), and every text/grid
+     color was tuned for a light surface only, unreadable against this app's
+     actual dark background. These replacements pass the validator in both
+     modes as a set — never re-order or swap a single slot without
+     re-running scripts/validate_palette.js from the dataviz skill.
+     Status colors (good/warning/serious/critical) are fixed and never
+     themed — the same four steps hold in both modes. */
+  --chart-surface: #fcfcfb;
+  --chart-text-primary: #0b0b0b;
+  --chart-text-secondary: #52514e;
+  --chart-muted: #898781;
+  --chart-grid: #e1e0d9;
+  --chart-baseline: #c3c2b7;
+  --chart-series-1: #2a78d6; /* blue */
+  --chart-series-2: #eb6834; /* orange */
+  --chart-series-3: #1baf7a; /* aqua */
+  --chart-series-4: #eda100; /* yellow */
+  --chart-series-5: #e87ba4; /* magenta */
+  --chart-series-6: #008300; /* green */
+  --chart-series-7: #4a3aa7; /* violet */
+  --chart-series-8: #e34948; /* red */
+  --chart-status-good: #0ca30c;
+  --chart-status-warning: #fab219;
+  --chart-status-serious: #ec835a;
+  --chart-status-critical: #d03b3b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -30,6 +62,22 @@
     --color-destructive: #f87171;
     --color-success: #34d399;
     --color-ring: #60a5fa;
+
+    --chart-surface: #1a1a19;
+    --chart-text-primary: #ffffff;
+    --chart-text-secondary: #c3c2b7;
+    --chart-muted: #898781;
+    --chart-grid: #2c2c2a;
+    --chart-baseline: #383835;
+    --chart-series-1: #3987e5;
+    --chart-series-2: #d95926;
+    --chart-series-3: #199e70;
+    --chart-series-4: #c98500;
+    --chart-series-5: #d55181;
+    --chart-series-6: #008300;
+    --chart-series-7: #9085e9;
+    --chart-series-8: #e66767;
+    /* status colors intentionally NOT redeclared — fixed, never themed */
   }
 }
 

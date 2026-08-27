@@ -206,6 +206,16 @@ export async function generateDashboardPdf(
     }
   }
 
+  if (report.gtm.product_life_cycle) {
+    subHeading("Lifecycle Stage (Product Life Cycle)");
+    if (report.gtm.product_life_cycle.stage) {
+      drawText(report.gtm.product_life_cycle.stage, { f: bold, extraGapAfter: 2 });
+      drawText(report.gtm.product_life_cycle.rationale, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+    } else {
+      drawText(report.gtm.product_life_cycle.rationale, { color: rgb(0.5, 0.5, 0.5) });
+    }
+  }
+
   // ===== Page 2.5: Brand Diagnosis, Campaign, Personas =====
   if (report.brand) {
     subHeading("Brand Diagnosis — Node Word & Weakest Layer (CBBE)");

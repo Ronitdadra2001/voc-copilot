@@ -327,7 +327,11 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           </SectionCard>
         )}
 
-        <SectionCard title="GTM — STP & Positioning" className={hasForces ? "" : "xl:col-span-2"}>
+        <SectionCard
+          title="GTM — STP & Positioning"
+          info="Segment / Target / Position via the STP framework; Points of Difference / Parity via the 3C Positioning model (Customer × Company × Competitor)."
+          className={hasForces ? "" : "xl:col-span-2"}
+        >
           <div className="text-sm text-fg space-y-1 mb-3">
             <p>
               <span className="font-medium">Segment:</span> {report.gtm.segment}
@@ -369,20 +373,41 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
               )}
             </div>
           </div>
-          {report.gtm.ansoff && (
-            <div className="mt-3 pt-3 border-t divider">
-              <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
-                Growth direction (Ansoff Matrix)
-              </p>
-              {report.gtm.ansoff.quadrant ? (
-                <p className="text-sm text-fg">
-                  <span className="badge-accent capitalize">
-                    {report.gtm.ansoff.quadrant.replace(/_/g, " ")}
-                  </span>{" "}
-                  — {report.gtm.ansoff.rationale}
-                </p>
-              ) : (
-                <p className="text-sm text-fg-soft">{report.gtm.ansoff.rationale}</p>
+          {(report.gtm.ansoff || report.gtm.product_life_cycle) && (
+            <div className="mt-3 pt-3 border-t divider grid sm:grid-cols-2 gap-3">
+              {report.gtm.ansoff && (
+                <div>
+                  <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
+                    Growth direction (Ansoff Matrix)
+                  </p>
+                  {report.gtm.ansoff.quadrant ? (
+                    <p className="text-sm text-fg">
+                      <span className="badge-accent capitalize">
+                        {report.gtm.ansoff.quadrant.replace(/_/g, " ")}
+                      </span>{" "}
+                      — {report.gtm.ansoff.rationale}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-fg-soft">{report.gtm.ansoff.rationale}</p>
+                  )}
+                </div>
+              )}
+              {report.gtm.product_life_cycle && (
+                <div>
+                  <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
+                    Lifecycle stage (Product Life Cycle)
+                  </p>
+                  {report.gtm.product_life_cycle.stage ? (
+                    <p className="text-sm text-fg">
+                      <span className="badge-accent capitalize">
+                        {report.gtm.product_life_cycle.stage}
+                      </span>{" "}
+                      — {report.gtm.product_life_cycle.rationale}
+                    </p>
+                  ) : (
+                    <p className="text-sm text-fg-soft">{report.gtm.product_life_cycle.rationale}</p>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -391,7 +416,10 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
 
       {report.brand && (
         <div className="grid xl:grid-cols-2 gap-4">
-          <SectionCard title="Brand Diagnosis (CBBE)">
+          <SectionCard
+            title="Brand Diagnosis (CBBE)"
+            info="Keller's Customer-Based Brand Equity pyramid, built bottom-up: Salience (do they know you?) → Performance + Imagery (what it does / what it means) → Judgements + Feelings (their evaluation) → Resonance (loyalty, advocacy). The weakest layer caps everything built on top of it."
+          >
             <div className="space-y-3 text-sm">
               <div>
                 <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
@@ -526,7 +554,10 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
         )}
 
       {report.brand?.personas && report.brand.personas.length > 0 && (
-        <SectionCard title="Customer Personas (from review evidence)">
+        <SectionCard
+          title="Ideal Customer Personas (Market Research)"
+          info="Segmentation output, not a demographic guess — each persona is built only from goals/pain-points that real review evidence actually shows for that segment (the STP segment/target above names the group; these are who's inside it). No invented ages, incomes, or backstories."
+        >
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {report.brand.personas.map((p, i) => (
               <div key={i} className="card p-3">
@@ -548,7 +579,7 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
 
       <SectionCard
         title="Issues & Solutions"
-        info="At most 3-4 issues, ranked by how many reviews cite them and whether customers used real exit language. Each one names the problem directly, cites the evidence behind it, and gives a costed, sequenced fix — not an abstract theme score."
+        info="At most 3-4 issues, ranked by how many reviews cite them and whether customers used real exit language. Each one names the problem directly, cites the evidence behind it, and gives a costed, sequenced fix — not an abstract theme score. Priority and at-risk severity are calibrated using the Brand Fidelity Matrix (how sacred the broken promise was, not just how many people mentioned it) before the product frameworks below name what to actually build."
       >
         <div className="space-y-4">
           {report.issues.map((issue, i) => (

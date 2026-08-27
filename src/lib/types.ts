@@ -104,8 +104,8 @@ export interface DashboardReport {
   };
 
   /** GTM — Segmentation/Targeting/Positioning + Points of Difference/Parity,
-   * grounded in review evidence and named competitors (bhupesh GTM/branding
-   * frameworks: STP, 3C positioning, POD/POP). */
+   * grounded in review evidence and named competitors (STP, 3C positioning,
+   * POD/POP). */
   gtm: {
     segment: string;
     target: string;
@@ -118,6 +118,16 @@ export interface DashboardReport {
      * the evidence doesn't clearly point to one. */
     ansoff: {
       quadrant: "market_penetration" | "product_development" | "market_development" | "diversification" | null;
+      rationale: string;
+    };
+    /** Product Life Cycle stage — introduction/growth/maturity/decline,
+     * grounded in review-volume and complaint-type signals (not a guess).
+     * Changes urgency, not just diagnosis: a maturity-stage brand's
+     * execution fixes compound differently than an introduction-stage
+     * brand's awareness gap. null stage if the evidence doesn't clearly
+     * point to one. */
+    product_life_cycle: {
+      stage: "introduction" | "growth" | "maturity" | "decline" | null;
       rationale: string;
     };
   };

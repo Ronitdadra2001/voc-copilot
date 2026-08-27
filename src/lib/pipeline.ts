@@ -340,6 +340,10 @@ const GtmBrandSchema = z.object({
         .nullable(),
       rationale: z.string(),
     }),
+    product_life_cycle: z.object({
+      stage: z.enum(["introduction", "growth", "maturity", "decline"]).nullable(),
+      rationale: z.string(),
+    }),
   }),
   brand: z.object({
     node_word: z.string().nullable(),
@@ -398,6 +402,7 @@ const DEFAULT_GTM_BRAND: GtmBrandResult = {
     points_of_difference: [],
     points_of_parity: [],
     ansoff: { quadrant: null, rationale: "insufficient data" },
+    product_life_cycle: { stage: null, rationale: "insufficient data" },
   },
   brand: {
     node_word: null,
@@ -446,6 +451,7 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
 
 - "gtm": segment/target/position inferred from the product/reviews; points_of_difference = things this product does that named competitors' context does NOT show (grounded in competitor data below, never invented); points_of_parity = things reviews show this product does that competitors also seem to do. Empty arrays if no competitor context exists — do not invent competitor behavior.
 - "gtm.ansoff": which of the 4 Ansoff growth quadrants the recommended direction actually falls into, grounded in what the issues/competitor data show — market_penetration (fix issues to win more of the existing market with the existing product), product_development (build new features/products for existing customers), market_development (take the existing product to a new segment/geography), diversification (new product + new market). null quadrant + "insufficient data" if the evidence doesn't clearly point to one — never force a quadrant.
+- "gtm.product_life_cycle": which PLC stage the evidence points to — introduction (few reviews, awareness/education complaints, "never heard of this" signals), growth (rapid adoption, feature-gap complaints as new segments arrive), maturity (high review volume, complaints skew to service/reliability/price rather than the core offering, named competitors crowding the space), decline (churn/switching-to-rival language dominates, "used to be good," shrinking relevance). The stage changes urgency, not just the diagnosis — say so in the rationale (e.g. maturity means execution fixes compound, introduction means awareness matters more than incremental polish). null + "insufficient data" if the evidence doesn't clearly point to one.
 - "brand.node_word": the single word this brand owns in customers' minds, ONLY if the evidence supports one. null + "insufficient data" if no clear word emerges — do not force one.
 - "brand.weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — whichever the review evidence shows is weakest.
 - "brand.personas": 2-3 ONLY if the reviews contain enough concrete detail to build one honestly — no invented demographics. Empty array if reviews are too thin.
@@ -471,7 +477,8 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
 {
   "gtm": {
     "segment": string, "target": string, "position": string, "points_of_difference": string[], "points_of_parity": string[],
-    "ansoff": { "quadrant": "market_penetration" | "product_development" | "market_development" | "diversification" | null, "rationale": string }
+    "ansoff": { "quadrant": "market_penetration" | "product_development" | "market_development" | "diversification" | null, "rationale": string },
+    "product_life_cycle": { "stage": "introduction" | "growth" | "maturity" | "decline" | null, "rationale": string }
   },
   "brand": {
     "node_word": string | null, "node_word_evidence": string,
@@ -494,8 +501,9 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     temperature: 0.2,
     // Bumped again for the archetype/posture/asset_valuator fields — this
     // pass's knowledge base grew today (BAV, archetypes, posture taxonomy
-    // added), so the output budget needs the same margin restored.
-    maxTokens: 2500,
+    // added), so the output budget needs the same margin restored. Bumped
+    // once more for product_life_cycle.
+    maxTokens: 2700,
   });
 
   const parsed = extractJson(content);
@@ -787,6 +795,7 @@ export async function runReport(
       self_image: null,
     };
     report.gtm.ansoff = { quadrant: null, rationale: "No review issues were found to ground a growth direction in." };
+    report.gtm.product_life_cycle = { stage: null, rationale: "No review issues were found to ground a lifecycle stage in." };
   }
 
   return report;
