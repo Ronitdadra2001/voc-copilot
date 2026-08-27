@@ -536,7 +536,13 @@ const ProductFinanceSchema = z.object({
     top_issue_pct: z.number().nullable(),
   }),
   highs: z.array(z.object({ label: z.string(), detail: z.string() })),
-  issues: z.array(IssueSchema).max(3),
+  // The prompt asks for AT MOST 3 — validated loosely here (generous
+  // ceiling against genuinely runaway output) and trimmed to 3 in code
+  // after a successful parse instead of hard-rejecting the whole pass.
+  // Confirmed live: the model returned 4 once, otherwise-valid, and a
+  // strict .max(3) here threw away a perfectly usable response over a
+  // one-item overshoot.
+  issues: z.array(IssueSchema).max(8),
   porters_five_forces: z.object({
     rivalry: z.string(),
     threat_of_new_entrants: z.string(),
@@ -688,6 +694,23 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
   if (!result.success) {
     throw new Error(`Product/finance pass response didn't match expected schema: ${result.error.message}`);
   }
+  // Rank at-risk issues first, then by pct_of_reviews descending — matches
+  // the prompt's own stated ranking rule — before trimming to the top 3,
+  // so an overshoot never accidentally drops the most important issue.
+  result.data.issues = result.data.issues
+    .sort((a, b) => Number(b.at_risk) - Number(a.at_risk) || b.pct_of_reviews - a.pct_of_reviews)
+    .slice(0, 3);
+  // Recompute from the (possibly trimmed) issues array rather than trusting
+  // the model's own counts — keeps "Issues Found"/"At-Risk Issues" stat
+  // tiles consistent with what's actually rendered below them.
+  const trimmed = result.data.issues;
+  result.data.metrics.issue_count = trimmed.length;
+  result.data.metrics.at_risk_issue_count = trimmed.filter((i) => i.at_risk).length;
+  // top_issue = highest pct_of_reviews specifically, independent of the
+  // at-risk-first display order above.
+  const top = [...trimmed].sort((a, b) => b.pct_of_reviews - a.pct_of_reviews)[0] ?? null;
+  result.data.metrics.top_issue_title = top?.title ?? null;
+  result.data.metrics.top_issue_pct = top?.pct_of_reviews ?? null;
   return result.data;
 }
 
