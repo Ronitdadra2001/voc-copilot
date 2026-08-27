@@ -350,6 +350,8 @@ const GtmBrandSchema = z.object({
     node_word_evidence: z.string(),
     weakest_cbbe_layer: z.string(),
     weakest_cbbe_layer_evidence: z.string(),
+    strongest_cbbe_layer: z.string(),
+    strongest_cbbe_layer_evidence: z.string(),
     archetype: z.object({
       name: z
         .enum([
@@ -409,6 +411,8 @@ const DEFAULT_GTM_BRAND: GtmBrandResult = {
     node_word_evidence: "insufficient data",
     weakest_cbbe_layer: "unknown",
     weakest_cbbe_layer_evidence: "insufficient data",
+    strongest_cbbe_layer: "unknown",
+    strongest_cbbe_layer_evidence: "insufficient data",
     archetype: { name: null, rationale: "insufficient data" },
     posture: { stance: null, rationale: "insufficient data" },
     asset_valuator: { vitality: null, stature: null, quadrant: null, rationale: "insufficient data" },
@@ -453,7 +457,8 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
 - "gtm.ansoff": which of the 4 Ansoff growth quadrants the recommended direction actually falls into, grounded in what the issues/competitor data show — market_penetration (fix issues to win more of the existing market with the existing product), product_development (build new features/products for existing customers), market_development (take the existing product to a new segment/geography), diversification (new product + new market). null quadrant + "insufficient data" if the evidence doesn't clearly point to one — never force a quadrant.
 - "gtm.product_life_cycle": which PLC stage the evidence points to — introduction (few reviews, awareness/education complaints, "never heard of this" signals), growth (rapid adoption, feature-gap complaints as new segments arrive), maturity (high review volume, complaints skew to service/reliability/price rather than the core offering, named competitors crowding the space), decline (churn/switching-to-rival language dominates, "used to be good," shrinking relevance). The stage changes urgency, not just the diagnosis — say so in the rationale (e.g. maturity means execution fixes compound, introduction means awareness matters more than incremental polish). null + "insufficient data" if the evidence doesn't clearly point to one.
 - "brand.node_word": the single word this brand owns in customers' minds, ONLY if the evidence supports one. null + "insufficient data" if no clear word emerges — do not force one.
-- "brand.weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — whichever the review evidence shows is weakest.
+- "brand.weakest_cbbe_layer": one of salience / performance / imagery / judgements / feelings / resonance — whichever the review evidence shows is weakest. Keller's ladder, bottom-up: salience (do they know you exist) → performance (does it work) + imagery (what it means/who uses it) → judgements (quality/credibility) + feelings (warmth/security) → resonance (loyalty/advocacy) — name which rung specifically, and remember a lower rung caps everything built on top of it.
+- "brand.strongest_cbbe_layer": the SAME ladder's strongest rung — the one layer the evidence shows is actually working, grounded in real positive signal (a "highs" item, a repeat-purchase mention, explicit praise), not the mere absence of complaints about it. If nothing in the evidence reads as a genuine strength, say so plainly rather than picking a rung by default — "unknown" + an evidence string explaining why is preferable to inventing a positive.
 - "brand.personas": 2-3 ONLY if the reviews contain enough concrete detail to build one honestly — no invented demographics. Empty array if reviews are too thin.
 - "brand.campaign": Enemy-Stand-Mantra ONLY if a real customer pain point clearly justifies one (enemy = the ideology/behavior/condition the brand fights, NOT a competitor). null if unjustified.
 - "brand.kapferer_prism": Kapferer's Brand Identity Prism, all 6 facets, ONE sentence each, each grounded in review/competitor evidence — physique (tangible/visible traits), personality (character traits as if human), relationship (nature of the brand-consumer bond), culture (values/origins the brand emanates), reflection (who the brand's communication appears to target), self_image (how using it makes the customer feel about themselves). null for any facet the evidence genuinely doesn't support — never a generic filler sentence just to fill the field.
@@ -483,6 +488,7 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
   "brand": {
     "node_word": string | null, "node_word_evidence": string,
     "weakest_cbbe_layer": string, "weakest_cbbe_layer_evidence": string,
+    "strongest_cbbe_layer": string, "strongest_cbbe_layer_evidence": string,
     "archetype": { "name": "Innocent" | "Explorer" | "Sage" | "Hero" | "Outlaw" | "Magician" | "Lover" | "Jester" | "Caregiver" | "Ruler" | "Creator" | "Everyman" | null, "rationale": string },
     "posture": { "stance": "offensive" | "defensive" | "assertive" | null, "rationale": string },
     "asset_valuator": { "vitality": number | null, "stature": number | null, "quadrant": "leadership" | "niche_unrealized_potential" | "declining_eroded" | "new_unfocused_commodity" | null, "rationale": string },
@@ -502,8 +508,8 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     // Bumped again for the archetype/posture/asset_valuator fields — this
     // pass's knowledge base grew today (BAV, archetypes, posture taxonomy
     // added), so the output budget needs the same margin restored. Bumped
-    // once more for product_life_cycle.
-    maxTokens: 2700,
+    // once more for product_life_cycle, then again for strongest_cbbe_layer.
+    maxTokens: 2900,
   });
 
   const parsed = extractJson(content);
@@ -624,12 +630,14 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
    - "title": name the issue plainly and directly (e.g. "Missing charging cable in the box") — NEVER "Theme:" or an abstract category.
    - "evidence": 1-2 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
    - "fix": 2-3 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
-   - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage) — OR, if this issue is about price/discounts/subscriptions/"feels expensive", at least one entry should instead be a pricing framework (EVE/value-communication gap, Price Fence/Metric, Weber-Fechner framing, 4-box competitive reaction, incremental-vs-average cost). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." For a pricing issue: e.g. "EVE: this is a value-communication gap, not overpricing — the fix is explaining the differentiation, not cutting price" and "Price Metric: the complaint is about an unpredictable delivery fee, not the core price." Never a bare framework name with no verdict attached.
+   - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage) — OR, if this issue is about price/discounts/subscriptions/"feels expensive", at least one entry should instead be a pricing framework (EVE/value-communication gap, Price Fence/Metric, Weber-Fechner framing, 4-box competitive reaction, incremental-vs-average cost). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." For a pricing issue: e.g. "EVE: this is a value-communication gap, not overpricing — the fix is explaining the differentiation, not cutting price" and "Price Metric: the complaint is about an unpredictable delivery fee, not the core price." Never a bare framework name with no verdict attached. If a RICE score is one of the two, every number needs its label inline, not a bare digit — "Impact 2/3 (high)" and "Confidence 80%," never "Impact 2" or "Confidence 4" alone (see the RICE section in the knowledge base for the exact scale/labels to use).
    - "cost": a rupee/dollar estimate if reasonably inferable, "engineering time only" for investigation work, or "$0 — config/policy change" if free. Never vague.
    - "impact": a modeled, assumption-stated estimate (Guesstimate method: state each assumption explicitly, then compute — never a bare invented number).
    - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
    - "priority": "now" (0-30 days) for must-fix-first — baseline/core-function failures or at_risk=true — "near" (31-60 days) for real but less urgent, "far" (61-90 days) for lower-severity items.
-4. "porters_five_forces" — qualitative, one sentence each. NAMED COMPETITORS below is real data — use it, do not default to "insufficient data" when non-empty. 0 named competitors → "competitive intensity can't be assessed from available data." 1+ → name them and describe rivalry from what their context actually shows.
+4. "porters_five_forces" — qualitative, one sentence each. This framework is normally applied using industry-level knowledge, not just scraped company data — do NOT default all five to "can't be assessed" just because only "rivalry" has direct review/competitor evidence; that under-uses the framework and was confirmed live to leave 4 of 5 forces empty on a real report. Split by what each force actually needs:
+   - "rivalry" and "buyer_power" are COMPANY-SPECIFIC — ground these in the actual NAMED COMPETITORS/review evidence below (name the rival, cite the switching/comparison signal). 0 named competitors + no switching language in reviews → say so plainly, don't force it.
+   - "threat_of_new_entrants", "threat_of_substitutes", and "supplier_power" are INDUSTRY-STRUCTURE questions — reason about these using general, defensible knowledge of the category this product/company competes in (capital intensity, regulatory barriers, how easily a customer could switch to a different TYPE of solution, how concentrated the supplier/input base typically is for this kind of business). This is standard analyst practice for Porter's Five Forces, not fabrication — but say so plainly ("based on typical industry structure for [category], not company-specific data") rather than presenting it as if it were measured from the reviews. Only fall back to "insufficient data" if the product category itself is genuinely unclear from the input.
 4b. "porters_five_forces_intensity" — for each force, a 1-5 integer rating (1 = weak/low threat, 5 = strong/high threat) that matches the qualitative sentence in "porters_five_forces" for that same force — null ONLY for a force whose qualitative text above genuinely says data is insufficient to judge; never null just because it's harder to quantify than the text version.
 5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: apply the FINANCE KNOWLEDGE below (margin waterfall, LTV:CAC ratio, break-even/operating leverage, relevant-cost/ABC hidden-loser check) ONLY where real figures in the data actually support that specific framework — name the framework applied, e.g. "Gross margin of X% relative to a Y% COGS suggests a sourcing/pricing problem (margin waterfall), not something downstream fixes solve." Never apply a framework the data can't actually support just to fill the field.
 6. "finance.revenue_at_risk" (Guesstimate method: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
@@ -785,6 +793,8 @@ export async function runReport(
     report.brand.node_word_evidence = "No review issues were found to derive a brand association from.";
     report.brand.weakest_cbbe_layer = "unknown";
     report.brand.weakest_cbbe_layer_evidence = "No review issues were found to diagnose brand health from.";
+    report.brand.strongest_cbbe_layer = "unknown";
+    report.brand.strongest_cbbe_layer_evidence = "No review issues were found to diagnose brand health from.";
     report.brand.campaign = null;
     report.brand.kapferer_prism = {
       physique: null,

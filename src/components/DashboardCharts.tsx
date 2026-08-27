@@ -118,19 +118,24 @@ function RoadmapSequenceChart({ issues }: { issues: DashboardReport["issues"] })
   // Deliberately different data from the issue-share chart: this counts WHEN
   // each fix is sequenced (the 90-day Now/Near/Far gate), not how big the
   // underlying complaint is. Answers "how much is front-loaded vs deferred,"
-  // which the share chart can't show.
+  // which the share chart can't show. Always renders all three buckets, even
+  // at zero — dropping empty buckets (the previous version did) turns "all
+  // 3 issues are urgent" into a single orphaned bar with no Near/Far to
+  // compare against, which reads as a broken/incomplete chart rather than a
+  // real (if front-loaded) sequencing story.
   const data = PRIORITY_ORDER.map((p) => ({
     name: PRIORITY_LABELS[p],
     count: issues.filter((i) => i.priority === p).length,
     key: p,
-  })).filter((d) => d.count > 0);
+  }));
+  const total = issues.length;
 
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <BarChart data={data} margin={{ top: 8, right: 16, left: 0, bottom: 24 }}>
+      <BarChart data={data} margin={{ top: 20, right: 16, left: 0, bottom: 24 }}>
         <CartesianGrid stroke={GRIDLINE} vertical={false} />
         <XAxis dataKey="name" tick={TICK_STYLE} angle={-10} textAnchor="end" height={44} />
-        <YAxis allowDecimals={false} tick={TICK_STYLE} />
+        <YAxis allowDecimals={false} tick={TICK_STYLE} domain={[0, "dataMax + 1"]} />
         <Tooltip
           contentStyle={{
             background: "var(--chart-surface)",
@@ -140,11 +145,14 @@ function RoadmapSequenceChart({ issues }: { issues: DashboardReport["issues"] })
             fontSize: 12,
             color: "var(--chart-text-primary)",
           }}
-          formatter={(value) => `${value} issue(s)`}
+          formatter={(value) => [
+            `${value} of ${total} issue(s) — ${total ? Math.round((Number(value) / total) * 100) : 0}%`,
+            "Scheduled here",
+          ]}
         />
         <Bar dataKey="count" name="Issues" radius={[4, 4, 0, 0]} maxBarSize={70}>
           {data.map((d, i) => (
-            <Cell key={i} fill={PRIORITY_COLORS[d.key]} />
+            <Cell key={i} fill={PRIORITY_COLORS[d.key]} fillOpacity={d.count === 0 ? 0.25 : 1} />
           ))}
         </Bar>
       </BarChart>
@@ -153,6 +161,8 @@ function RoadmapSequenceChart({ issues }: { issues: DashboardReport["issues"] })
 }
 
 const BAV_MIDPOINT = 5.5;
+
+type QuadrantCorner = "tl" | "tr" | "bl" | "br";
 
 // Each Brand Asset Valuator quadrant is a qualitative STATE about the brand,
 // not a data series — status colors are the right tool for that (see the
@@ -172,23 +182,23 @@ const BAV_QUADRANTS = [
     x: [BAV_MIDPOINT, 10] as const,
     y: [BAV_MIDPOINT, 10] as const,
     color: STATUS.good,
-    labelPos: "insideTopRight" as const,
+    corner: "tr" as QuadrantCorner,
   },
   {
     key: "niche_unrealized_potential",
-    label: "Niche / Unrealized Potential",
+    label: "Niche / Unrealized",
     x: [0, BAV_MIDPOINT] as const,
     y: [BAV_MIDPOINT, 10] as const,
     color: STATUS.warning,
-    labelPos: "insideTopLeft" as const,
+    corner: "tl" as QuadrantCorner,
   },
   {
     key: "new_unfocused_commodity",
-    label: "New / Unfocused / Commodity",
+    label: "New / Unfocused",
     x: [0, BAV_MIDPOINT] as const,
     y: [0, BAV_MIDPOINT] as const,
     color: STATUS.serious,
-    labelPos: "insideBottomLeft" as const,
+    corner: "bl" as QuadrantCorner,
   },
   {
     key: "declining_eroded",
@@ -196,9 +206,42 @@ const BAV_QUADRANTS = [
     x: [BAV_MIDPOINT, 10] as const,
     y: [0, BAV_MIDPOINT] as const,
     color: STATUS.critical,
-    labelPos: "insideBottomRight" as const,
+    corner: "br" as QuadrantCorner,
   },
 ];
+
+// Recharts' built-in ReferenceArea `label` position enum silently failed to
+// paint at all here (confirmed live via a real screenshot — the quadrant
+// rectangles rendered with no text on them, even though the accessibility
+// tree reported the label text existing in the DOM — a Recharts layout
+// quirk on a reference area this large, not a missing-content bug). Using
+// the `content` render-prop instead gives a real viewBox in pixel space and
+// full control over a plain SVG <text> we draw ourselves — no silent
+// failure mode possible.
+function quadrantLabel(corner: QuadrantCorner, color: string) {
+  const PAD = 10;
+  return (props: { viewBox?: { x: number; y: number; width: number; height: number } }) => {
+    const vb = props.viewBox;
+    if (!vb) return null;
+    const isTop = corner === "tl" || corner === "tr";
+    const isLeft = corner === "tl" || corner === "bl";
+    const x = isLeft ? vb.x + PAD : vb.x + vb.width - PAD;
+    const y = isTop ? vb.y + PAD + 10 : vb.y + vb.height - PAD;
+    return (
+      <text
+        x={x}
+        y={y}
+        fill={color}
+        fontSize={12}
+        fontWeight={700}
+        fontFamily="var(--font-sans)"
+        textAnchor={isLeft ? "start" : "end"}
+      >
+        {BAV_QUADRANTS.find((q) => q.color === color)?.label}
+      </text>
+    );
+  };
+}
 
 /** Brand Asset Valuator — vitality (differentiation x relevance) plotted
  * against stature (esteem x knowledge). A single point in one of four
@@ -215,11 +258,10 @@ export function AssetValuatorChart({
   const point = [{ x: assetValuator.vitality, y: assetValuator.stature }];
   const activeQuadrant = BAV_QUADRANTS.find((q) => q.key === assetValuator.quadrant);
   const pointColor = activeQuadrant?.color ?? "var(--chart-series-1)";
-  const labelStyle = { fontSize: 11, fontFamily: "var(--font-sans)", fontWeight: 600 };
 
   return (
-    <ResponsiveContainer width="100%" height={300}>
-      <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 20 }}>
+    <ResponsiveContainer width="100%" height={320}>
+      <ScatterChart margin={{ top: 10, right: 16, left: 8, bottom: 24 }}>
         {BAV_QUADRANTS.map((q) => (
           <ReferenceArea
             key={q.key}
@@ -228,9 +270,14 @@ export function AssetValuatorChart({
             y1={q.y[0]}
             y2={q.y[1]}
             fill={q.color}
-            fillOpacity={q.key === assetValuator.quadrant ? 0.22 : 0.09}
+            // Bumped from 0.09/0.22 — at that low an opacity every quadrant
+            // read as plain gray noise in practice, not a tinted color;
+            // this is still well below the point marker's full-strength
+            // fill so the marker stays the clear focal element.
+            fillOpacity={q.key === assetValuator.quadrant ? 0.38 : 0.16}
             stroke="none"
-            label={{ value: q.label, position: q.labelPos, fill: q.color, ...labelStyle }}
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            label={{ content: quadrantLabel(q.corner, q.color) } as any}
           />
         ))}
         <ReferenceLine x={BAV_MIDPOINT} stroke={GRIDLINE} />
@@ -242,12 +289,12 @@ export function AssetValuatorChart({
           domain={[0, 10]}
           ticks={[0, 2.5, 5, 7.5, 10]}
           tick={TICK_STYLE}
-          label={{
-            value: "Vitality (differentiation × relevance)",
-            position: "insideBottom",
-            offset: -8,
-            ...TICK_STYLE,
-          }}
+          // Kept to one word on the chart itself — the full "differentiation
+          // × relevance" definition lives in the card's (i) tooltip. The
+          // full phrase here was overflowing its allotted margin and
+          // getting clipped mid-word (confirmed via screenshot: "Stature
+          // (esteem × know[...]" cut off).
+          label={{ value: "Vitality →", position: "insideBottom", offset: -6, ...TICK_STYLE }}
         />
         <YAxis
           type="number"
@@ -256,12 +303,7 @@ export function AssetValuatorChart({
           domain={[0, 10]}
           ticks={[0, 2.5, 5, 7.5, 10]}
           tick={TICK_STYLE}
-          label={{
-            value: "Stature (esteem × knowledge)",
-            angle: -90,
-            position: "insideLeft",
-            ...TICK_STYLE,
-          }}
+          label={{ value: "Stature →", angle: -90, position: "insideLeft", ...TICK_STYLE }}
         />
         <Tooltip
           cursor={{ strokeDasharray: "3 3", stroke: GRIDLINE }}

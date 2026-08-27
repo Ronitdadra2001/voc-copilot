@@ -4,7 +4,25 @@ Use these when turning a customer-review failure theme into a **product recommen
 
 ## RICE prioritization
 Score `Reach × Impact × Confidence ÷ Effort`. Use this to justify why one theme's fix
-belongs on the roadmap before another, not just "this seems important."
+belongs on the roadmap before another, not just "this seems important." Every number
+must carry its own meaning inline — a bare "Impact 2" or "Confidence 4" forces the
+reader to already know the scale, which they don't. State the value AND its label
+together, every time:
+- **Reach**: % of reviews/users this touches in the period — a real measured or
+  estimated share (e.g. "Reach 25% of reviewers"), never a unitless number.
+- **Impact** (fixed scale, always name the tier, not just the number): **3 = massive**
+  (blocks the core job entirely), **2 = high** (a major but not total blocker),
+  **1 = medium** (a real but survivable friction), **0.5 = low** (minor annoyance),
+  **0.25 = minimal**. Write it as "Impact 2/3 (high)", never a bare "Impact 2."
+- **Confidence**: a percentage, not a raw number — **100% = data-backed** (the
+  reviews directly show this), **80% = strong hunch**, **50% = a real guess worth
+  flagging as such**. Write "Confidence 80%," never "Confidence 4."
+- **Effort**: person-weeks/months of the actual team's time, or a relative
+  "S/M/L/XL" t-shirt size if a time estimate would be a fabricated precision — never
+  a bare unitless number either.
+Then give the resulting score AND say in one clause why that ranks it where it does
+relative to the other issues in this report (e.g. "score 96 — the highest of the
+three issues here because Impact is massive and Effort is only S").
 
 ## CIRCLES (for "what should we build to fix this?")
 - **C**omprehend the situation — what is the underlying job the broken feature was

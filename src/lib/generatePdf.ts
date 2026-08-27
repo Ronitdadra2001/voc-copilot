@@ -228,6 +228,10 @@ export async function generateDashboardPdf(
     }
     drawText(`Weakest layer: ${report.brand.weakest_cbbe_layer}`, { f: bold, extraGapAfter: 2 });
     drawText(report.brand.weakest_cbbe_layer_evidence, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+    if (report.brand.strongest_cbbe_layer && report.brand.strongest_cbbe_layer !== "unknown") {
+      drawText(`Strongest layer: ${report.brand.strongest_cbbe_layer}`, { f: bold, extraGapAfter: 2 });
+      drawText(report.brand.strongest_cbbe_layer_evidence, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+    }
 
     if (report.brand.archetype || report.brand.posture || report.brand.asset_valuator) {
       subHeading("Brand Archetype, Posture & Asset Valuator");

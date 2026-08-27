@@ -438,16 +438,31 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
                   </p>
                 )}
               </div>
-              <div>
-                <p className="text-xs font-semibold uppercase text-fg-soft mb-1">
-                  Weakest brand layer
-                </p>
-                <p className="text-fg">
-                  <span className="font-semibold capitalize">
-                    {report.brand.weakest_cbbe_layer}
-                  </span>{" "}
-                  — {report.brand.weakest_cbbe_layer_evidence}
-                </p>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase mb-1" style={{ color: STATUS.critical }}>
+                    Weakest brand layer
+                  </p>
+                  <p className="text-fg">
+                    <span className="font-semibold capitalize">
+                      {report.brand.weakest_cbbe_layer}
+                    </span>{" "}
+                    — {report.brand.weakest_cbbe_layer_evidence}
+                  </p>
+                </div>
+                {report.brand.strongest_cbbe_layer && report.brand.strongest_cbbe_layer !== "unknown" && (
+                  <div>
+                    <p className="text-xs font-semibold uppercase mb-1" style={{ color: STATUS.good }}>
+                      Strongest brand layer
+                    </p>
+                    <p className="text-fg">
+                      <span className="font-semibold capitalize">
+                        {report.brand.strongest_cbbe_layer}
+                      </span>{" "}
+                      — {report.brand.strongest_cbbe_layer_evidence}
+                    </p>
+                  </div>
+                )}
               </div>
               {(report.brand.archetype?.name || report.brand.posture?.stance) && (
                 <div className="flex flex-wrap items-center gap-2 pt-2 border-t divider">

@@ -171,6 +171,11 @@ export interface DashboardReport {
      * performance, imagery, judgements, feelings, or resonance. */
     weakest_cbbe_layer: string;
     weakest_cbbe_layer_evidence: string;
+    /** The same ladder's strongest rung — grounded in genuine positive
+     * signal, not just the absence of complaints. "unknown" if nothing in
+     * the evidence reads as a real strength. */
+    strongest_cbbe_layer: string;
+    strongest_cbbe_layer_evidence: string;
     /** The one Jungian brand archetype (of 12) the evidence best supports —
      * null if the evidence is too thin to support picking one. */
     archetype: {
