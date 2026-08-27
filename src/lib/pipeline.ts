@@ -139,19 +139,28 @@ ${knowledgeBase}
 ${SCHEMA_INSTRUCTIONS}`;
 
   // A live scrape can return far more reviews than a single LLM call can
-  // afford — Groq's account-wide 8,000-tokens/minute cap (confirmed via
-  // multiple live 413s) makes review-text size a hard constraint now, not
-  // just a token-budget nicety. A FIXED character cap here kept getting
-  // surprised by variance in real-world knowledge-base/instruction-text
-  // size and scrape volume (confirmed in practice, twice) — measure the
-  // actual system prompt that will be sent and size the review sample
-  // against the budget that's ACTUALLY left, so this stays correct
-  // regardless of future edits to the knowledge base or instructions.
+  // afford — measure the actual system prompt that will be sent and size the
+  // review sample against the budget that's ACTUALLY left, so this stays
+  // correct regardless of future edits to the knowledge base or instructions.
   // ~4 chars/token is a standard, safely-conservative estimate for English
   // prose (real BPE tokenizers usually do a bit better than this, so this
   // slightly over-estimates cost, which is the safe direction to err in).
+  //
+  // This budget is calibrated to Gemini (the primary provider — effectively
+  // unbounded input context) and OpenAI (128k context, third in the failover
+  // chain), NOT to Groq's account-wide 8,000-tokens/minute cap. Confirmed
+  // live: getKnowledgeBase()'s three combined files (product/marketing/
+  // consumer-behavior) alone now run ~6,200 tokens, which left this budget
+  // clamping reviewCharBudget to 0 when it was still sized for Groq — every
+  // real analysis silently sent ZERO review text to the model and came back
+  // "0 reviews found" even though gather-reviews had fetched genuine data.
+  // Groq is no longer primary, so sizing this call to Groq's cap was
+  // over-constraining the common case (Gemini succeeding) to protect an
+  // uncommon one (Groq being reached at all) — and the provider loop in
+  // llm.ts already fails a too-large Groq request over to OpenAI/OpenRouter
+  // gracefully, so there is no correctness cost to raising this.
   const estimateTokens = (text: string) => Math.ceil(text.length / 4);
-  const REQUEST_TOKEN_BUDGET = 7500; // 500-token safety margin below the 8,000 cap
+  const REQUEST_TOKEN_BUDGET = 24000;
   const OUTPUT_TOKEN_RESERVE = 1200; // matches maxTokens passed to chatCompletion below
   const fixedPromptTokens = estimateTokens(system);
   const reviewCharBudget = Math.max(
