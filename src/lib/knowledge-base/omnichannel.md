@@ -67,6 +67,30 @@ these before assuming an English-first, text-first, desktop-first customer:
   electronics — its absence can show up indirectly as "wasn't what I expected"
   complaints (a description/expectation-setting gap, not a product defect).
 
+## D2C vs. marketplace dependence — a genuine trade-off, not a default answer
+When a complaint pattern traces back to *where* the brand sells (a marketplace-
+fulfilled order vs a brand.com order), weigh both sides before recommending
+"go direct":
+- **Marketplace strength**: reach/discovery a young brand can't buy on its
+  own, plus fulfillment and trust infrastructure (COD, easy returns, buyer
+  protection) already built — often the right channel for acquisition.
+- **D2C strength**: owned first-party data, full margin (no marketplace
+  commission), and full control of the post-purchase experience (packaging,
+  support, repeat-purchase messaging) — the right channel for retention and
+  brand-building.
+A "go D2C" recommendation is only earned when the complaint is actually about
+a lever D2C uniquely controls (data, margin, experience-consistency); a "we're
+not visible enough" complaint is a reach problem, and going direct does not
+solve a reach problem.
+
+## Virtual try-on / AR as a specific fix for "not what I expected" complaints
+For categories with high pre-purchase-fit uncertainty (beauty shades, eyewear,
+apparel fit, furniture-in-room), a cluster of "didn't match what I expected"
+or "wrong color/size/fit" complaints often traces to a missing try-before-you-
+buy mechanism, not a product defect. Virtual try-on/AR (or, cheaper, a video
+demo or a real-photo size guide) directly targets that expectation gap — name
+it as the fix instead of a generic "improve product photos."
+
 ## How to phrase this like an MBA professor
 - Lead with the customer behavior shift, not the retail jargon: "she doesn't
   care which warehouse ships her order" beats "omni-channel fulfillment

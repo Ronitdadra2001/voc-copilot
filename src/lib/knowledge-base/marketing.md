@@ -112,6 +112,30 @@ Ground the quadrant choice in what the issues actually show — recommending
 "launch a new tier to reach a segment reviews show is currently unserved" is
 Market Development.
 
+## Brand Asset Valuator (BAV) — is this brand a leader, a niche gem, or fading?
+Two axes, each built from two review-groundable questions:
+- **Brand Vitality** = Differentiation (does the evidence show this brand doing
+  something genuinely distinct, not just fast/cheap/convenient like every
+  rival?) × Relevance (does it fit what customers actually need day-to-day?).
+- **Brand Stature** = Esteem (do reviews show respect/trust, e.g. "reliable,"
+  "quality") × Knowledge (do customers seem to understand what the brand
+  stands for, beyond just "the app that delivers X"?).
+Four zones: **High Vitality + Low Stature = Niche/Unrealized Potential**
+(strong idea, hasn't earned trust yet — the fix is proving reliability, not
+more differentiation). **High Vitality + High Stature = Leadership**. **Low
+Vitality + High Stature = Declining/Eroded** (trusted but no longer seen as
+different — vulnerable to a cheaper or newer entrant). **Low Vitality + Low
+Stature = New/Unfocused/Commodity**. Never invent a quadrant without review
+evidence for at least one axis; say "insufficient data" rather than force it.
+
+## Recognition-Recall Matrix (for brands spanning multiple product lines)
+When a brand sells several categories (not just one product), plot each
+category by whether customers recall it unprompted (top-of-mind) vs only
+recognize it when prompted. A core category with high unprompted recall is a
+true asset; a side category stuck at "recognized but not recalled" is not a
+demand problem, it's an **awareness** problem — don't recommend a product fix
+for a category customers simply don't know the brand offers.
+
 ## CDI/BDI — where to recommend spend (only with real geographic data)
 Category Development Index (category sales share ÷ population share) × Brand
 Development Index (own sales share ÷ population share) — only compute this if
