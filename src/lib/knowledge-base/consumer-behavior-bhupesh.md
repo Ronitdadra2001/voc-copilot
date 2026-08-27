@@ -1,4 +1,4 @@
-# Consumer Behavior Angle — Bhupesh's CB/MR/Branding Concepts (compact reference)
+# Consumer Behavior Angle — CB/MR/Branding Concepts (compact reference)
 
 Use these to explain WHY a customer reacted the way they did, not just WHAT
 they said. Every issue should be traceable to at least one named concept

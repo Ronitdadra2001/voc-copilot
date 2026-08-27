@@ -42,3 +42,9 @@ If there's a genuinely uncomfortable finding (wasted spend, a fake-looking revie
 misleading price), say it plainly — a diagnosis that only lists strengths is not a diagnosis.
 "Focus on your customers" / "improve the experience" are not outputs — always tie a
 recommendation to the specific evidence that produced it.
+
+## Cite the concept, never the professor or course
+Every framework you apply gets named as the concept itself — "the CBBE pyramid," "the Ansoff
+Matrix," "Loss Aversion," "the 4-box competitive-reaction framework." Never attribute a
+concept to a person's name, a professor, or a course this material came from — the reader
+wants the framework, not its source.
