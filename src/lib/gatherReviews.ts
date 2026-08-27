@@ -241,8 +241,7 @@ async function scrapePlainFetch(url: string): Promise<string> {
  * each target page's full body, which Firecrawl used to provide; less
  * content per result but a source that's actually reachable. */
 async function searchWebViaBing(
-  query: string,
-  limit: number
+  query: string
 ): Promise<{ url: string; title?: string; markdown: string }[]> {
   try {
     const res = await fetch(`https://www.bing.com/search?q=${encodeURIComponent(query)}`, {
@@ -257,7 +256,15 @@ async function searchWebViaBing(
 
     // Each organic result lives in a `<li class="b_algo"` block containing
     // an `<h2><a href=...>` title link and a `<p class="b_lineclampN">`
-    // snippet — confirmed directly against a real response.
+    // snippet — confirmed directly against a real response. Parses EVERY
+    // block Bing returns (up to ~10 per page, its natural page size) — the
+    // caller's `mustMention`/host-allowlist filters run over the full set,
+    // not a pre-truncated slice. Truncating here BEFORE those filters was
+    // a real bug: confirmed live, a broad "X reviews complaints" query's
+    // raw top-4 results are rarely third-party review platforms (mostly
+    // the company's own site/news), so limiting collection to 4 before
+    // filtering silently produced zero results even when relevant review
+    // platforms existed further down Bing's own results.
     const items: { url: string; title?: string; markdown: string }[] = [];
     const resultBlocks = html.split(/<li class="b_algo"/).slice(1);
     for (const block of resultBlocks) {
@@ -270,7 +277,6 @@ async function searchWebViaBing(
       const snippet = snippetMatch ? stripHtml(snippetMatch[1]).slice(0, MAX_CHARS_PER_RESULT) : "";
       if (!title && !snippet) continue;
       items.push({ url, title, markdown: `${title}. ${snippet}` });
-      if (items.length >= limit) break;
     }
     return items;
   } catch {
@@ -318,11 +324,14 @@ async function searchWeb(
         markdown: doc.markdown.slice(0, MAX_CHARS_PER_RESULT),
         engine: "bing",
       });
+      // Cap AFTER filtering, not before — capping the raw Bing fetch
+      // itself was the bug (see searchWebViaBing's comment).
+      if (items.length >= limit) break;
     }
     return items;
   }
 
-  const results = await searchWebViaBing(query, limit);
+  const results = await searchWebViaBing(query);
   return applyFilters(results);
 }
 
@@ -420,12 +429,16 @@ export async function autoGatherReviews(
       // slots that could otherwise surface real review content from
       // platforms that actually work.
       `${companyName}${descSuffix} reviews complaints (site:g2.com OR site:trustpilot.com OR site:reddit.com OR site:capterra.com OR site:sitejabber.com OR site:consumeraffairs.com OR site:mouthshut.com)`,
-      // Firecrawl fetches full-page content for every result in one call —
-      // 8 was taking 30-40s+ on its own for review-heavy pages. 4 real
-      // sources is still enough for a meaningful analysis and cuts this
-      // substantially; speed matters more than marginal extra coverage
-      // here.
-      4,
+      // Bing (no per-result fetch cost, unlike the old Firecrawl full-page
+      // scrape) returns ~10 organic results per page regardless; this needs
+      // to stay high because a REAL review-platform host is then filtered
+      // for downstream (site: hints don't reliably restrict Bing's ranking,
+      // confirmed elsewhere) — a broad "X reviews complaints" query's raw
+      // top results skew toward the company's own site/news, not review
+      // platforms, so a low limit here was leaving nothing left after that
+      // filter (confirmed live: this was the actual cause of empty
+      // dashboards, not a code crash).
+      10,
       // Without this, near-miss results (a platform's own homepage, a
       // same-category unrelated brand, a generic "reviews are fake" thread)
       // were passing straight through as if they were real data about this
