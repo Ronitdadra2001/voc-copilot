@@ -527,7 +527,7 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
    - "title": name the issue plainly and directly (e.g. "Missing charging cable in the box") — NEVER "Theme:" or an abstract category.
    - "evidence": 1-2 bullets. Every issue below carries a "quotes" array (real verbatim review text) — use those directly as evidence. This field must NEVER be empty.
    - "fix": 2-3 concrete, sequenced steps. Apply cheapest-fix-first: step 1 should be the free/near-free version if one exists (a copy/config/policy change) before anything requiring engineering or spend; only recommend paid marketing/spend AFTER the underlying issue is fixed. Each step must be something a named role could start on Monday. Use the CONSUMER BEHAVIOR & JOURNEY GROUNDING below — an issue tagged "purchase/checkout" needs a different kind of fix than one tagged "support/service."
-   - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the 4 named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." Never a bare framework name with no verdict attached.
+   - "frameworks_applied": AT LEAST 2 entries — this is where you diagnose what the issue actually IS and how urgently to address it, using AT LEAST 2 of the named PM frameworks from the knowledge base below (RICE, CIRCLES, Kano must-be/performance/delighter, AARRR funnel stage) — OR, if this issue is about price/discounts/subscriptions/"feels expensive", at least one entry should instead be a pricing framework (EVE/value-communication gap, Price Fence/Metric, Weber-Fechner framing, 4-box competitive reaction, incremental-vs-average cost). Each entry is one concrete sentence naming the framework and its verdict for THIS issue — e.g. "Kano: must-be violation — absence causes major dissatisfaction, this is floor not ceiling, not a nice-to-have" and "AARRR: Retention-stage — existing paying customers leaving, so this compounds against revenue already earned, not just future growth." For a pricing issue: e.g. "EVE: this is a value-communication gap, not overpricing — the fix is explaining the differentiation, not cutting price" and "Price Metric: the complaint is about an unpredictable delivery fee, not the core price." Never a bare framework name with no verdict attached.
    - "cost": a rupee/dollar estimate if reasonably inferable, "engineering time only" for investigation work, or "$0 — config/policy change" if free. Never vague.
    - "impact": a modeled, assumption-stated estimate (Guesstimate method: state each assumption explicitly, then compute — never a bare invented number).
    - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
@@ -537,7 +537,7 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
 6. "finance.revenue_at_risk" (Guesstimate method: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
 7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below). MUST name the actual issues themselves (e.g. "customers report the app crashing at checkout and delivery partners marking orders delivered when they weren't") — NEVER just a count ("2 issues were found" on its own, with no description of what they are, is not acceptable — a reader should know what's actually wrong after reading only this sentence).
 
-=== PRODUCT MANAGEMENT KNOWLEDGE (apply AT LEAST 2 named frameworks per issue — issues/fixes ONLY, never the finance section) ===
+=== PRODUCT MANAGEMENT & PRICING KNOWLEDGE (apply AT LEAST 2 named frameworks per issue — issues/fixes ONLY, never the finance section; for a pricing-related issue, at least one of the 2 should be a pricing framework — EVE, price fences/metrics, Weber-Fechner framing, the 4-box competitive-reaction framework, or incremental-vs-average cost) ===
 ${productKnowledge}
 
 === FINANCE KNOWLEDGE (apply ONLY inside the "finance" section, ONLY where real figures below actually support a given framework) ===
@@ -592,7 +592,7 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     // to afford a larger output reserve — tightened down from an initial
     // 3800 after that still exceeded the cap once real competitor context
     // was present (confirmed live: 8068 requested against an 8000 limit).
-    maxTokens: 2400,
+    maxTokens: 2000,
   });
 
   const parsed = extractJson(content);

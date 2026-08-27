@@ -61,9 +61,17 @@ export function getMarketingBrandingKnowledge(): string {
 }
 
 /** Product management lens — RICE/CIRCLES prioritization, Kano-style
- * severity, AARRR funnel staging, cheapest-fix-first sequencing. */
+ * severity, AARRR funnel staging, cheapest-fix-first sequencing — plus
+ * pricing.md (EVE, price fences/metrics, Weber-Fechner framing, the 4-box
+ * competitive-reaction framework, incremental-vs-average cost, price
+ * waterfall/policy, PLC-stage pricing). Pricing complaints are a real,
+ * common issue category (delivery fees, subscription value, "feels
+ * expensive") that need pricing-specific diagnosis at the issue-fix level
+ * — unlike finance.md's cost-accounting concepts (deliberately excluded
+ * from issue-level reasoning per product direction), pricing strategy IS
+ * legitimately part of "how do we fix this issue." */
 export function getProductKnowledge(): string {
-  return withMandate("product.md");
+  return withMandate("product.md", "pricing.md");
 }
 
 /** Finance lens — margin waterfall, LTV:CAC, break-even/operating leverage,
