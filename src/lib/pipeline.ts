@@ -509,7 +509,14 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
 const IssueSchema = z.object({
   title: z.string(),
   pct_of_reviews: z.number(),
-  at_risk: z.boolean(),
+  // .default(false) rather than a bare boolean — confirmed live: the model
+  // occasionally omits this field on the last issue in a 3-issue array
+  // (a schema-adherence slip under output-length pressure, not JSON
+  // truncation — the surrounding JSON was otherwise valid), which used to
+  // hard-fail the entire pass over one missing flag on one issue. Defaulting
+  // to false (never at_risk) is the safe direction to err in — it just
+  // means that one issue doesn't get flagged at-risk, not a fabricated true.
+  at_risk: z.boolean().default(false),
   evidence: z.array(z.string()),
   fix: z.array(z.string()),
   frameworks_applied: z.array(z.string()).min(2),
@@ -662,15 +669,18 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     temperature: 0.2,
     // This pass's JSON schema is the largest of the three (up to 4 issues,
     // each with evidence/fix/frameworks_applied arrays, plus Porter's Five
-    // Forces and the full finance section) — the default budget truncated
-    // it mid-response before reaching porters_five_forces/finance,
-    // confirmed in practice via a schema-validation failure on exactly
-    // those two fields. This pass's own knowledge base (product.md only)
-    // is small, so it has the input-side headroom within Groq's 8k TPM cap
-    // to afford a larger output reserve — tightened down from an initial
-    // 3800 after that still exceeded the cap once real competitor context
-    // was present (confirmed live: 8068 requested against an 8000 limit).
-    maxTokens: 2000,
+    // Forces + its parallel intensity scores, and the full finance section)
+    // — the default budget truncated it mid-response before reaching
+    // porters_five_forces/finance, confirmed in practice via a schema-
+    // validation failure on exactly those two fields. Bumped again from
+    // 2000 after product.md/pricing.md grew this session (supply-chain
+    // diagnosis, price-war alternatives) and porters_five_forces_intensity
+    // was added — confirmed live: the model started omitting a field
+    // (at_risk) on the last issue under the tighter budget, a sign of
+    // output-length pressure even though the JSON itself stayed valid.
+    // Groq's 8k TPM cap no longer sizes this (see llm.ts) — Gemini/OpenAI
+    // have the headroom.
+    maxTokens: 2800,
   });
 
   const parsed = extractJson(content);
