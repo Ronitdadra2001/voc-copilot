@@ -14,7 +14,12 @@ four are integrated:
 - **Digital commerce** — a single view of the customer across web/app/
   marketplace, not separate silos with separate inventory and separate promos.
 - **Fulfillment** — buy-anywhere/deliver-anywhere/return-anywhere; the customer
-  does not care which warehouse or store services their order.
+  does not care which warehouse or store services their order. Concrete
+  tactics worth naming by name rather than paraphrasing: **BOPIS/click-and-
+  collect** (buy online, pick up in-store) and **ship-from-store** turn store
+  inventory into fulfillment capacity; an **endless aisle** (in-store kiosk or
+  associate access to full online inventory) fixes "wanted it in-store but it
+  wasn't there" complaints without a warehouse-side fix.
 - **Planning** — one consistent demand forecast and inventory plan across
   channels, not a store plan and a "digital plan" bolted on separately.
 A complaint like "website said in stock, store didn't have it" or "couldn't

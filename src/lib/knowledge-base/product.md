@@ -39,6 +39,19 @@ A product recommendation must be **specific and buildable**, not a vibe:
   Add inline validation on the email field (the most-cited blocker) — RICE:
   Reach 24%, Impact 3, Confidence 4, Effort 1 → score 288, prioritize this sprint."
 
+## Supply chain / value chain diagnosis (for physical-goods complaints)
+For "arrived damaged," "expired/stale," "always out of stock," or "wrong item"
+themes, walk the physical value chain stage by stage instead of guessing which
+one broke: raw material/supplier quality → manufacturing (machine condition,
+batch size vs actual demand — a batch far larger than demand is a common,
+underrated root cause of spoilage/excess-stock write-offs) → warehouse/storage
+conditions → transport/last-mile → demand forecasting accuracy (an outdated
+or badly-fed forecasting tool causes both stockouts AND overstock-spoilage,
+opposite-looking symptoms with the same root cause). Naming the specific stage
+beats a generic "improve quality control" — e.g. "spoilage traces to batch
+sizes set above real demand, not a warehouse or transport problem" is a
+diagnosis; "improve freshness" is not.
+
 ## Which funnel stage does each theme actually belong to? (AARRR)
 Tag every failure theme by funnel stage before recommending a fix — the fix
 type differs completely by stage, and mixing them produces generic advice:

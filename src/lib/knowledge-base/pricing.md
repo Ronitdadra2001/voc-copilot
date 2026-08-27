@@ -49,6 +49,24 @@ Never default to "match the competitor's price" as the fix without this
 check — matching a non-cost-justified rival move can start a war neither
 side wins.
 
+## Alternatives to a price war (the 4-box says "Attack" — this is HOW, without just cutting price)
+Matching a rival's price cut is the most expensive lever, not the default one.
+Cheaper/safer alternatives, roughly in order to try first: (1) **non-price
+response** — compete on quality, service, or risk instead ("we're the safer
+choice," not "we're the cheaper one"); (2) **selective pricing** — cut price
+only on the specific SKU/channel/segment the rival is actually attacking,
+leave full margin everywhere else, or launch a lower-price flanker brand
+instead of repricing the core line; (3) **change the comparison** — reframe
+what's being compared (a bundle/package vs a bare unit price) so the rival's
+lower number isn't a clean apples-to-apples anymore; (4) **retreat** — cede
+the segment deliberately if defending it isn't worth the margin, and say so
+explicitly rather than bleeding out slowly. Only recommend actually matching
+price when at least one is true: a real cost advantage exists, the threat is
+confined to a small segment competitors won't chase, losses there are
+subsidized by profit elsewhere, or cutting price genuinely grows the whole
+category (not just reslices it) — the reasoning should name which of these
+applies, not just say "match the price."
+
 ## Incremental cost, not average cost — is a "give this away free" fix actually unprofitable?
 A fix suggestion should be judged on incremental (avoidable) cost, never
 average cost. A goodwill discount/loyalty perk that "looks unprofitable"
