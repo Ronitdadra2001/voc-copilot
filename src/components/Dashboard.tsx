@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DashboardReport } from "@/lib/types";
-import DashboardCharts from "@/components/DashboardCharts";
+import DashboardCharts, { AssetValuatorChart, PortersRadarChart } from "@/components/DashboardCharts";
 
 // Status palette from the dataviz skill (validated, fixed — never themed):
 // good/warning/serious/critical. Distinct from the categorical chart slots
@@ -23,6 +23,28 @@ const PRIORITY_LABEL: Record<DashboardReport["issues"][number]["priority"], stri
   now: "NOW (0-30 days)",
   near: "NEAR (31-60 days)",
   far: "FAR (61-90 days)",
+};
+
+const POSTURE_LABEL: Record<"offensive" | "defensive" | "assertive", string> = {
+  offensive: "Offensive",
+  defensive: "Defensive",
+  assertive: "Assertive",
+};
+
+const POSTURE_COLOR: Record<"offensive" | "defensive" | "assertive", string> = {
+  offensive: "bg-red-50 text-red-700 border border-red-200",
+  defensive: "bg-blue-50 text-blue-700 border border-blue-200",
+  assertive: "bg-emerald-50 text-emerald-700 border border-emerald-200",
+};
+
+const BAV_QUADRANT_LABEL: Record<
+  "leadership" | "niche_unrealized_potential" | "declining_eroded" | "new_unfocused_commodity",
+  string
+> = {
+  leadership: "Leadership",
+  niche_unrealized_potential: "Niche / Unrealized Potential",
+  declining_eroded: "Declining / Eroded",
+  new_unfocused_commodity: "New / Unfocused / Commodity",
 };
 
 function InfoTooltip({ text }: { text: string }) {
@@ -282,7 +304,10 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
       <div className="grid xl:grid-cols-2 gap-4">
         {hasForces && (
           <SectionCard title="Porter's Five Forces">
-            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-fg">
+            {report.porters_five_forces_intensity && (
+              <PortersRadarChart intensity={report.porters_five_forces_intensity} />
+            )}
+            <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 text-sm text-fg mt-2">
               <p>
                 <span className="font-medium">Rivalry:</span> {forces.rivalry}
               </p>
@@ -396,6 +421,26 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
                   — {report.brand.weakest_cbbe_layer_evidence}
                 </p>
               </div>
+              {(report.brand.archetype?.name || report.brand.posture?.stance) && (
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t divider">
+                  {report.brand.archetype?.name && (
+                    <span
+                      title={report.brand.archetype.rationale}
+                      className="cursor-help text-xs font-semibold px-2 py-1 rounded badge-accent"
+                    >
+                      Archetype: {report.brand.archetype.name}
+                    </span>
+                  )}
+                  {report.brand.posture?.stance && (
+                    <span
+                      title={report.brand.posture.rationale}
+                      className={`cursor-help text-xs font-semibold px-2 py-1 rounded ${POSTURE_COLOR[report.brand.posture.stance]}`}
+                    >
+                      Posture: {POSTURE_LABEL[report.brand.posture.stance]}
+                    </span>
+                  )}
+                </div>
+              )}
             </div>
           </SectionCard>
 
@@ -425,6 +470,35 @@ export default function Dashboard({ analysisId }: { analysisId: string }) {
           </SectionCard>
         </div>
       )}
+
+      {report.brand?.asset_valuator?.quadrant &&
+        report.brand.asset_valuator.vitality != null &&
+        report.brand.asset_valuator.stature != null && (
+          <SectionCard
+            title="Brand Asset Valuator"
+            info="Vitality (differentiation × relevance) on the x-axis, Stature (esteem × knowledge) on the y-axis — the same 2x2 Young & Rubicam model marketers use to tell a differentiated-but-unproven brand apart from a trusted-but-generic one."
+          >
+            <div className="grid md:grid-cols-[1fr,auto] gap-4 items-center">
+              <AssetValuatorChart assetValuator={report.brand.asset_valuator} />
+              <div className="text-sm space-y-2 md:max-w-[220px]">
+                <p className="badge-accent inline-block">
+                  {BAV_QUADRANT_LABEL[report.brand.asset_valuator.quadrant]}
+                </p>
+                <p className="text-fg-muted text-xs">{report.brand.asset_valuator.rationale}</p>
+                <dl className="text-xs text-fg-soft space-y-0.5 pt-1 border-t divider">
+                  <div className="flex justify-between">
+                    <dt>Vitality</dt>
+                    <dd className="font-semibold text-fg">{report.brand.asset_valuator.vitality}/10</dd>
+                  </div>
+                  <div className="flex justify-between">
+                    <dt>Stature</dt>
+                    <dd className="font-semibold text-fg">{report.brand.asset_valuator.stature}/10</dd>
+                  </div>
+                </dl>
+              </div>
+            </div>
+          </SectionCard>
+        )}
 
       {report.brand?.kapferer_prism &&
         Object.values(report.brand.kapferer_prism).some((v) => v) && (

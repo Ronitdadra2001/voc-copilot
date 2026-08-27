@@ -9,6 +9,15 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
+  ScatterChart,
+  Scatter,
+  ReferenceArea,
+  ReferenceLine,
+  RadarChart,
+  Radar,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
 } from "recharts";
 import type { DashboardReport } from "@/lib/types";
 
@@ -113,6 +122,98 @@ function RoadmapSequenceChart({ issues }: { issues: DashboardReport["issues"] })
           ))}
         </Bar>
       </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+const BAV_QUADRANT_FILL = "#f4f3ee"; // one flat neutral tint — the point color carries the meaning, not the background
+const BAV_MIDPOINT = 5.5;
+
+/** Brand Asset Valuator — vitality (differentiation x relevance) plotted
+ * against stature (esteem x knowledge). A single point in one of four
+ * quadrants; renders null rather than a misleading chart when the pass
+ * couldn't honestly score either axis. */
+export function AssetValuatorChart({
+  assetValuator,
+}: {
+  assetValuator: DashboardReport["brand"]["asset_valuator"];
+}) {
+  if (assetValuator.vitality == null || assetValuator.stature == null) return null;
+  const point = [{ x: assetValuator.vitality, y: assetValuator.stature }];
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <ScatterChart margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+        <ReferenceArea x1={0} x2={BAV_MIDPOINT} y1={BAV_MIDPOINT} y2={10} fill={BAV_QUADRANT_FILL} fillOpacity={0.5} />
+        <ReferenceArea x1={BAV_MIDPOINT} x2={10} y1={BAV_MIDPOINT} y2={10} fill={BAV_QUADRANT_FILL} fillOpacity={0.9} />
+        <ReferenceArea x1={0} x2={BAV_MIDPOINT} y1={0} y2={BAV_MIDPOINT} fill={BAV_QUADRANT_FILL} fillOpacity={0.15} />
+        <ReferenceArea x1={BAV_MIDPOINT} x2={10} y1={0} y2={BAV_MIDPOINT} fill={BAV_QUADRANT_FILL} fillOpacity={0.3} />
+        <ReferenceLine x={BAV_MIDPOINT} stroke={GRIDLINE} />
+        <ReferenceLine y={BAV_MIDPOINT} stroke={GRIDLINE} />
+        <XAxis
+          type="number"
+          dataKey="x"
+          name="Vitality"
+          domain={[0, 10]}
+          ticks={[0, 2.5, 5, 7.5, 10]}
+          tick={{ fill: MUTED_TEXT, fontSize: 11 }}
+          label={{ value: "Vitality (differentiation × relevance)", position: "insideBottom", offset: -4, fontSize: 11, fill: MUTED_TEXT }}
+        />
+        <YAxis
+          type="number"
+          dataKey="y"
+          name="Stature"
+          domain={[0, 10]}
+          ticks={[0, 2.5, 5, 7.5, 10]}
+          tick={{ fill: MUTED_TEXT, fontSize: 11 }}
+          label={{ value: "Stature (esteem × knowledge)", angle: -90, position: "insideLeft", fontSize: 11, fill: MUTED_TEXT }}
+        />
+        <Tooltip
+          cursor={{ strokeDasharray: "3 3" }}
+          formatter={(value, name) => [`${value}/10`, name]}
+        />
+        <Scatter
+          data={point}
+          fill={CATEGORICAL[0]}
+          shape={(props: { cx?: number; cy?: number }) => (
+            <circle cx={props.cx} cy={props.cy} r={8} fill={CATEGORICAL[0]} stroke="#fff" strokeWidth={2} />
+          )}
+        />
+      </ScatterChart>
+    </ResponsiveContainer>
+  );
+}
+
+const FORCE_LABELS: Record<keyof DashboardReport["porters_five_forces_intensity"], string> = {
+  rivalry: "Rivalry",
+  threat_of_new_entrants: "New Entrants",
+  threat_of_substitutes: "Substitutes",
+  buyer_power: "Buyer Power",
+  supplier_power: "Supplier Power",
+};
+
+/** Porter's Five Forces as a radar — renders null rather than a flat/empty
+ * pentagon when fewer than 3 forces have an honest 1-5 score (a radar with
+ * 0-2 real points isn't a shape worth showing). */
+export function PortersRadarChart({
+  intensity,
+}: {
+  intensity: DashboardReport["porters_five_forces_intensity"];
+}) {
+  const data = (Object.keys(FORCE_LABELS) as (keyof typeof FORCE_LABELS)[])
+    .map((key) => ({ force: FORCE_LABELS[key], value: intensity[key] }))
+    .filter((d): d is { force: string; value: number } => d.value != null);
+  if (data.length < 3) return null;
+
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <RadarChart data={data} margin={{ top: 8, right: 24, left: 24, bottom: 8 }}>
+        <PolarGrid stroke={GRIDLINE} />
+        <PolarAngleAxis dataKey="force" tick={{ fill: MUTED_TEXT, fontSize: 11 }} />
+        <PolarRadiusAxis domain={[0, 5]} tickCount={6} tick={{ fill: MUTED_TEXT, fontSize: 10 }} />
+        <Tooltip formatter={(value) => [`${value}/5`, "Intensity"]} />
+        <Radar dataKey="value" stroke={CATEGORICAL[5]} fill={CATEGORICAL[5]} fillOpacity={0.35} />
+      </RadarChart>
     </ResponsiveContainer>
   );
 }

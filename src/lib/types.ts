@@ -92,6 +92,17 @@ export interface DashboardReport {
     supplier_power: string;
   };
 
+  /** Parallel 1-5 intensity scores for the same five forces above — powers
+   * the radar chart. null for any force the qualitative text couldn't
+   * honestly judge (never invented just to fill the chart). */
+  porters_five_forces_intensity: {
+    rivalry: number | null;
+    threat_of_new_entrants: number | null;
+    threat_of_substitutes: number | null;
+    buyer_power: number | null;
+    supplier_power: number | null;
+  };
+
   /** GTM — Segmentation/Targeting/Positioning + Points of Difference/Parity,
    * grounded in review evidence and named competitors (bhupesh GTM/branding
    * frameworks: STP, 3C positioning, POD/POP). */
@@ -150,6 +161,33 @@ export interface DashboardReport {
      * performance, imagery, judgements, feelings, or resonance. */
     weakest_cbbe_layer: string;
     weakest_cbbe_layer_evidence: string;
+    /** The one Jungian brand archetype (of 12) the evidence best supports —
+     * null if the evidence is too thin to support picking one. */
+    archetype: {
+      name:
+        | "Innocent" | "Explorer" | "Sage" | "Hero" | "Outlaw" | "Magician"
+        | "Lover" | "Jester" | "Caregiver" | "Ruler" | "Creator" | "Everyman"
+        | null;
+      rationale: string;
+    };
+    /** Offensive (challenging a leader), Defensive (protecting an
+     * established position), or Assertive (steady identity-building, no
+     * active market war) — null if no competitor context exists to judge. */
+    posture: {
+      stance: "offensive" | "defensive" | "assertive" | null;
+      rationale: string;
+    };
+    /** Brand Asset Valuator — vitality (differentiation x relevance) and
+     * stature (esteem x knowledge), each 1-10, plus the resulting quadrant.
+     * null fields whenever the evidence can't honestly support a score. */
+    asset_valuator: {
+      vitality: number | null;
+      stature: number | null;
+      quadrant:
+        | "leadership" | "niche_unrealized_potential"
+        | "declining_eroded" | "new_unfocused_commodity" | null;
+      rationale: string;
+    };
     /** 2-3 personas inferred from review language/context — not invented
      * demographics, only what the review text actually implies. */
     personas: {

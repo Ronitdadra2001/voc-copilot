@@ -160,8 +160,8 @@ ${SCHEMA_INSTRUCTIONS}`;
   // llm.ts already fails a too-large Groq request over to OpenAI/OpenRouter
   // gracefully, so there is no correctness cost to raising this.
   const estimateTokens = (text: string) => Math.ceil(text.length / 4);
-  const REQUEST_TOKEN_BUDGET = 24000;
-  const OUTPUT_TOKEN_RESERVE = 1200; // matches maxTokens passed to chatCompletion below
+  const REQUEST_TOKEN_BUDGET = 30000;
+  const OUTPUT_TOKEN_RESERVE = 4000; // matches maxTokens passed to chatCompletion below
   const fixedPromptTokens = estimateTokens(system);
   const reviewCharBudget = Math.max(
     0,
@@ -192,7 +192,12 @@ ${SCHEMA_INSTRUCTIONS}`;
     ],
     jsonMode: true,
     temperature: 0.3,
-    maxTokens: 1200,
+    // Was 1200, matching an OUTPUT_TOKEN_RESERVE that assumed the review-
+    // budget clamp above would keep review count tiny. Now that the budget
+    // fix lets a real sample (up to 40 reviews) through, the model has far
+    // more to cluster/quote/recommend on — 1200 tokens truncated mid-string
+    // on a real run ("Unterminated string in JSON"), confirmed live.
+    maxTokens: 4000,
   });
 
   const parsed = extractJson(content);
@@ -319,6 +324,27 @@ const GtmBrandSchema = z.object({
     node_word_evidence: z.string(),
     weakest_cbbe_layer: z.string(),
     weakest_cbbe_layer_evidence: z.string(),
+    archetype: z.object({
+      name: z
+        .enum([
+          "Innocent", "Explorer", "Sage", "Hero", "Outlaw", "Magician",
+          "Lover", "Jester", "Caregiver", "Ruler", "Creator", "Everyman",
+        ])
+        .nullable(),
+      rationale: z.string(),
+    }),
+    posture: z.object({
+      stance: z.enum(["offensive", "defensive", "assertive"]).nullable(),
+      rationale: z.string(),
+    }),
+    asset_valuator: z.object({
+      vitality: z.number().min(1).max(10).nullable(),
+      stature: z.number().min(1).max(10).nullable(),
+      quadrant: z
+        .enum(["leadership", "niche_unrealized_potential", "declining_eroded", "new_unfocused_commodity"])
+        .nullable(),
+      rationale: z.string(),
+    }),
     personas: z.array(
       z.object({
         name: z.string(),
@@ -356,6 +382,9 @@ const DEFAULT_GTM_BRAND: GtmBrandResult = {
     node_word_evidence: "insufficient data",
     weakest_cbbe_layer: "unknown",
     weakest_cbbe_layer_evidence: "insufficient data",
+    archetype: { name: null, rationale: "insufficient data" },
+    posture: { stance: null, rationale: "insufficient data" },
+    asset_valuator: { vitality: null, stature: null, quadrant: null, rationale: "insufficient data" },
     personas: [],
     campaign: null,
     kapferer_prism: {
@@ -400,6 +429,9 @@ Financial context: ${c.financial.found ? c.financial.markdown.slice(0, 700) : "(
 - "brand.personas": 2-3 ONLY if the reviews contain enough concrete detail to build one honestly — no invented demographics. Empty array if reviews are too thin.
 - "brand.campaign": Enemy-Stand-Mantra ONLY if a real customer pain point clearly justifies one (enemy = the ideology/behavior/condition the brand fights, NOT a competitor). null if unjustified.
 - "brand.kapferer_prism": Kapferer's Brand Identity Prism, all 6 facets, ONE sentence each, each grounded in review/competitor evidence — physique (tangible/visible traits), personality (character traits as if human), relationship (nature of the brand-consumer bond), culture (values/origins the brand emanates), reflection (who the brand's communication appears to target), self_image (how using it makes the customer feel about themselves). null for any facet the evidence genuinely doesn't support — never a generic filler sentence just to fill the field.
+- "brand.archetype": the ONE Jungian archetype (from the 12 in the knowledge base) the review/competitor evidence best supports the brand projecting — name + one-sentence rationale grounded in actual tone/behavior shown in the data. null name + "insufficient data" if the evidence is too thin to support one — never force a pick.
+- "brand.posture": Offensive (challenging a leader / aggressive acquisition), Defensive (protecting an established position via heritage/endorsement/halo), or Assertive (steady identity-building, no active market war) — whichever the competitive evidence actually supports. null + "insufficient data" if no competitor context exists to judge this from.
+- "brand.asset_valuator": Brand Asset Valuator — vitality (1-10: differentiation x relevance, how distinct AND how needed the brand actually is per the evidence) and stature (1-10: esteem x knowledge, how trusted AND how well-understood it is) as separate integer scores, each grounded in specific review evidence (not a vibe), plus the resulting quadrant (leadership = high both; niche_unrealized_potential = high vitality, low stature; declining_eroded = low vitality, high stature; new_unfocused_commodity = low both). null for vitality/stature/quadrant + "insufficient data" if the evidence can't honestly support scoring — do not invent scores to fill the field.
 
 === MARKETING & BRANDING KNOWLEDGE ===
 ${knowledgeBase}
@@ -422,6 +454,9 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
   "brand": {
     "node_word": string | null, "node_word_evidence": string,
     "weakest_cbbe_layer": string, "weakest_cbbe_layer_evidence": string,
+    "archetype": { "name": "Innocent" | "Explorer" | "Sage" | "Hero" | "Outlaw" | "Magician" | "Lover" | "Jester" | "Caregiver" | "Ruler" | "Creator" | "Everyman" | null, "rationale": string },
+    "posture": { "stance": "offensive" | "defensive" | "assertive" | null, "rationale": string },
+    "asset_valuator": { "vitality": number | null, "stature": number | null, "quadrant": "leadership" | "niche_unrealized_potential" | "declining_eroded" | "new_unfocused_commodity" | null, "rationale": string },
     "personas": [{ "name": string, "context": string, "goals": string, "pain_points": string }],
     "campaign": { "enemy": string, "stand": string, "mantra": string } | null,
     "kapferer_prism": {
@@ -435,11 +470,10 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
     messages: [{ role: "system", content: system }],
     jsonMode: true,
     temperature: 0.2,
-    // Bumped from the 2000 default — adding the Kapferer Prism's 6 facets
-    // and the Ansoff quadrant/rationale meaningfully grew this pass's
-    // required output; this pass's knowledge base is still small enough
-    // (~3.3k tokens) to afford the extra room within Groq's 8k TPM cap.
-    maxTokens: 2200,
+    // Bumped again for the archetype/posture/asset_valuator fields — this
+    // pass's knowledge base grew today (BAV, archetypes, posture taxonomy
+    // added), so the output budget needs the same margin restored.
+    maxTokens: 2500,
   });
 
   const parsed = extractJson(content);
@@ -480,6 +514,17 @@ const ProductFinanceSchema = z.object({
     threat_of_substitutes: z.string(),
     buyer_power: z.string(),
     supplier_power: z.string(),
+  }),
+  // Parallel 1-5 intensity scores so the dashboard can render a radar chart
+  // instead of five paragraphs — kept as a SEPARATE object rather than
+  // nesting {text, intensity} inside porters_five_forces so the existing
+  // qualitative fields/UI/PDF code above didn't need to change shape.
+  porters_five_forces_intensity: z.object({
+    rivalry: z.number().min(1).max(5).nullable(),
+    threat_of_new_entrants: z.number().min(1).max(5).nullable(),
+    threat_of_substitutes: z.number().min(1).max(5).nullable(),
+    buyer_power: z.number().min(1).max(5).nullable(),
+    supplier_power: z.number().min(1).max(5).nullable(),
   }),
   finance: z.object({
     own: z.object({ found: z.boolean(), findings: z.array(z.string()) }),
@@ -542,6 +587,7 @@ Tone (applies to "summary" and every issue's "fix"/"impact"): write the way an M
    - "metric_to_track": the single number that proves this worked, its baseline if inferable, and a target.
    - "priority": "now" (0-30 days) for must-fix-first — baseline/core-function failures or at_risk=true — "near" (31-60 days) for real but less urgent, "far" (61-90 days) for lower-severity items.
 4. "porters_five_forces" — qualitative, one sentence each. NAMED COMPETITORS below is real data — use it, do not default to "insufficient data" when non-empty. 0 named competitors → "competitive intensity can't be assessed from available data." 1+ → name them and describe rivalry from what their context actually shows.
+4b. "porters_five_forces_intensity" — for each force, a 1-5 integer rating (1 = weak/low threat, 5 = strong/high threat) that matches the qualitative sentence in "porters_five_forces" for that same force — null ONLY for a force whose qualitative text above genuinely says data is insufficient to judge; never null just because it's harder to quantify than the text version.
 5. "finance" — own.found/competitors[].found true ONLY when real text is present below; never invent a number. "comparison": factual, using ONLY numbers present in both texts, else null. unit_economics_notes: apply the FINANCE KNOWLEDGE below (margin waterfall, LTV:CAC ratio, break-even/operating leverage, relevant-cost/ABC hidden-loser check) ONLY where real figures in the data actually support that specific framework — name the framework applied, e.g. "Gross margin of X% relative to a Y% COGS suggests a sourcing/pricing problem (margin waterfall), not something downstream fixes solve." Never apply a framework the data can't actually support just to fill the field.
 6. "finance.revenue_at_risk" (Guesstimate method: state assumptions, then compute) — applicable=true ONLY if a real revenue figure exists in OWN COMPANY FINANCIAL CONTEXT below; estimate = stated revenue × (sum of at-risk issues' pct_of_reviews as a proxy for at-risk revenue share), assumptions listing every step explicitly. If no real revenue figure found, applicable=false, estimate=null, assumptions=[].
 7. "summary" — direct-answer, restating what the reviews show in plain language (or answering the user's specific question if one was asked at intake — that question, if any, is embedded in the issues' recommendation fields below). MUST name the actual issues themselves (e.g. "customers report the app crashing at checkout and delivery partners marking orders delivered when they weren't") — NEVER just a count ("2 issues were found" on its own, with no description of what they are, is not acceptable — a reader should know what's actually wrong after reading only this sentence).
@@ -579,6 +625,7 @@ Respond with ONLY a single JSON object (no markdown fences, no commentary) match
   "highs": [{ "label": string, "detail": string }],
   "issues": [{ "title": string, "pct_of_reviews": number, "at_risk": boolean, "evidence": string[], "fix": string[], "frameworks_applied": string[], "cost": string, "impact": string, "metric_to_track": string, "priority": "now" | "near" | "far" }],
   "porters_five_forces": { "rivalry": string, "threat_of_new_entrants": string, "threat_of_substitutes": string, "buyer_power": string, "supplier_power": string },
+  "porters_five_forces_intensity": { "rivalry": number | null, "threat_of_new_entrants": number | null, "threat_of_substitutes": number | null, "buyer_power": number | null, "supplier_power": number | null },
   "finance": {
     "own": { "found": boolean, "findings": string[] },
     "competitors": [{ "name": string, "found": boolean, "findings": string[], "comparison": string | null }],
@@ -638,6 +685,7 @@ export async function runReport(
     highs: productFinance.highs,
     issues: productFinance.issues,
     porters_five_forces: productFinance.porters_five_forces,
+    porters_five_forces_intensity: productFinance.porters_five_forces_intensity,
     gtm: marketingBranding.gtm,
     finance: productFinance.finance,
     brand: marketingBranding.brand,

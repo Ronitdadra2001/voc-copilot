@@ -219,6 +219,31 @@ export async function generateDashboardPdf(
     drawText(`Weakest layer: ${report.brand.weakest_cbbe_layer}`, { f: bold, extraGapAfter: 2 });
     drawText(report.brand.weakest_cbbe_layer_evidence, { size: 10, color: rgb(0.4, 0.4, 0.45) });
 
+    if (report.brand.archetype || report.brand.posture || report.brand.asset_valuator) {
+      subHeading("Brand Archetype, Posture & Asset Valuator");
+      if (report.brand.archetype?.name) {
+        drawText(`Archetype: ${report.brand.archetype.name}`, { f: bold, extraGapAfter: 2 });
+        drawText(report.brand.archetype.rationale, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+      } else if (report.brand.archetype) {
+        drawText("Archetype: insufficient data", { color: rgb(0.5, 0.5, 0.5) });
+      }
+      if (report.brand.posture?.stance) {
+        drawText(`Posture: ${report.brand.posture.stance}`, { f: bold, extraGapAfter: 2 });
+        drawText(report.brand.posture.rationale, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+      } else if (report.brand.posture) {
+        drawText("Posture: insufficient data", { color: rgb(0.5, 0.5, 0.5) });
+      }
+      if (report.brand.asset_valuator?.quadrant) {
+        drawText(
+          `Brand Asset Valuator: ${report.brand.asset_valuator.quadrant.replace(/_/g, " ")} (vitality ${report.brand.asset_valuator.vitality}/10, stature ${report.brand.asset_valuator.stature}/10)`,
+          { f: bold, extraGapAfter: 2 }
+        );
+        drawText(report.brand.asset_valuator.rationale, { size: 10, color: rgb(0.4, 0.4, 0.45) });
+      } else if (report.brand.asset_valuator) {
+        drawText("Brand Asset Valuator: insufficient data", { color: rgb(0.5, 0.5, 0.5) });
+      }
+    }
+
     subHeading("Campaign Angle — Enemy / Stand / Mantra");
     if (report.brand.campaign) {
       drawText(`Enemy: ${report.brand.campaign.enemy}`);
